@@ -19,8 +19,12 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
+<<<<<<< HEAD
       "predictiveBackGestureEnabled": false,
       "package": "com.shivashenkar.QuickSolve"
+=======
+      "predictiveBackGestureEnabled": false
+>>>>>>> origin/main
     },
     "web": {
       "output": "static",
@@ -44,12 +48,15 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+<<<<<<< HEAD
     },
     "extra": {
       "router": {},
       "eas": {
         "projectId": "ba8db927-105e-48e5-93f4-f5ae49c25465"
       }
+=======
+>>>>>>> origin/main
     }
   }
 }
