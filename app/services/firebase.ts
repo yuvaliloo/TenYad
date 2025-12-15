@@ -1,15 +1,15 @@
 import { initializeApp } from "firebase/app";
-
 // 1. Import from the standard auth path
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getAnalytics } from "firebase/analytics";
+import { getReactNativePersistence, initializeAuth } from "firebase/auth";
+import { initializeFirestore } from 'firebase/firestore'; // Import this at the top
+import { getStorage } from "firebase/storage";
+
+
 
 // ... Your Config Object ...
   const firebaseConfig = {
-  apiKey: "AIzaSyAmf8jkF5ceOk1GVc0TxCPgVuqmhtnI7sA",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
@@ -25,6 +25,7 @@ export const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage as any)
 });
 
-export const db = getFirestore(app);
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
 export const storage = getStorage(app);
-const analytics = getAnalytics(app);
