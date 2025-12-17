@@ -1,4 +1,4 @@
-//להוסיף צהריים טובים
+
 import { router } from 'expo-router';
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';

@@ -19,6 +19,8 @@ export default function RootLayout() {
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         <Stack.Screen name="new-request" options={{ presentation: 'modal', title: 'New Request' }} />
         <Stack.Screen name="index" options={{ headerShown: false ,gestureEnabled:false}}/>
+        <Stack.Screen name="forgot-password" options={{ headerShown: false ,gestureEnabled:false}}/>
+        <Stack.Screen name="reset-password" options={{ headerShown: false ,gestureEnabled:false}}/>
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
