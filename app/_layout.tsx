@@ -17,10 +17,12 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-        <Stack.Screen name="new-request" options={{ presentation: 'modal', title: 'New Request' }} />
+        <Stack.Screen name="new-request" options={{ presentation: 'modal', title: 'משימה חדשה' }} />
+        <Stack.Screen name="task-details" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="index" options={{ headerShown: false ,gestureEnabled:false}}/>
         <Stack.Screen name="forgot-password" options={{ headerShown: false ,gestureEnabled:false}}/>
         <Stack.Screen name="reset-password" options={{ headerShown: false ,gestureEnabled:false}}/>
+        <Stack.Screen name="signup" options={{ presentation: 'modal',headerShown: false }}/>
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

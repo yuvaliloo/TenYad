@@ -16,14 +16,14 @@ export default function NewRequestScreen() {
 
     // 1. Validation
     if (!description.trim()) {
-      Alert.alert("חסר מידע", "אנא הזן תיאור לבקשה");
+      Alert.alert("חסר מידע", "אנא הזן תיאור למשימה");
       return;
     }
 
     // 2. User Check
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("שגיאה", "עליך להתחבר מחדש כדי לפרסם בקשה");
+      Alert.alert("שגיאה", "עליך להתחבר מחדש כדי לפרסם משימה");
       console.log("Error: User is null");
       return;
     }
@@ -47,7 +47,7 @@ export default function NewRequestScreen() {
       
       // 4. Reset & Navigate Back
       setLoading(false);
-      Alert.alert("הצלחה", "הבקשה פורסמה!");
+      Alert.alert("הצלחה", "המשימה פורסמה!");
       router.back();
 
     } catch (err: any) {
@@ -59,7 +59,7 @@ export default function NewRequestScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>תיאור הבקשה</Text>
+      <Text style={styles.title}>תיאור המשימה</Text>
 
       <TextInput
         value={description}

@@ -41,13 +41,25 @@ export default function FrontPage() {
               requests.map((r) => (
                 <View key={r.id} style={styles.taskerRequestCard}>
                   <Text style={styles.taskerRequestTitle}>{r.title}</Text>
-                  {r.description && (
+                  {/* {r.description && (
                     <Text style={styles.taskerRequestDescription} numberOfLines={2}>
                       {r.description}
                     </Text>
-                  )}
-                  <TouchableOpacity style={styles.taskerTakeButton}>
-                    <Text style={styles.taskerTakeButtonText}>קח משימה</Text>
+                  )} */}
+                  <TouchableOpacity 
+                    style={styles.taskerTakeButton}
+                    onPress={() => router.push({
+                      pathname: '/task-details',
+                      params: {
+                        id: r.id,
+                        title: r.title,
+                        description: r.description || '',
+                        location: r.location || '',
+                        createdBy: r.createdBy || ''
+                      }
+                    })}
+                  >
+                    <Text style={styles.taskerTakeButtonText}>הצג משימה</Text>
                   </TouchableOpacity>
                 </View>
               ))
@@ -68,7 +80,7 @@ export default function FrontPage() {
               onPress={() => router.push("/new-request")}
             >
               <Text style={styles.plusIcon}>+</Text>
-              <Text style={styles.buttonPrimaryText}>צור בקשה חדשה</Text>
+              <Text style={styles.buttonPrimaryText}>צור משימה חדשה</Text>
             </TouchableOpacity>
           </View>
 
@@ -94,7 +106,7 @@ export default function FrontPage() {
           <ScrollView style={styles.listsContainer}>
             {selectedTab === 'open' ? (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>בקשות פתוחות</Text>
+                <Text style={styles.sectionTitle}>משימות פתוחות</Text>
                 {openRequests.length > 0 ? (
                   openRequests.map((r) => (
                     <View key={r.id} style={styles.requestItem}>
@@ -112,7 +124,7 @@ export default function FrontPage() {
               </View>
             ) : (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>בקשות סגורות</Text>
+                <Text style={styles.sectionTitle}>משימות סגורות</Text>
                 {closedRequests.length > 0 ? (
                   closedRequests.map((r) => (
                     <View key={r.id} style={styles.requestItem}>
@@ -121,7 +133,7 @@ export default function FrontPage() {
                     </View>
                   ))
                 ) : (
-                  <Text style={styles.emptyText}>אין בקשות סגורות</Text>
+                  <Text style={styles.emptyText}>אין משימות סגורות</Text>
                 )}
               </View>
             )}
