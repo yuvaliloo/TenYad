@@ -6,10 +6,13 @@ import {
   View, 
   KeyboardAvoidingView, 
   Platform, 
-  ScrollView 
+  ScrollView,
+  Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from './services/firebase';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -65,13 +68,34 @@ export default function SignupScreen() {
     return isValid;
   };
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     if (validate()) {
-      // TODO: Send data to your Backend (Firebase/Supabase) here
-      console.log('Signup Successful:', { fullName, email });
-      
-      // On success, go to the main app
-      router.replace('/(tabs)'); 
+      try {
+        // Create user with email and password
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        
+        // Update the user's display name
+        await updateProfile(userCredential.user, {
+          displayName: fullName
+        });
+        
+        console.log('Signup Successful:', { fullName, email });
+        Alert.alert('הצלחה', 'החשבון נוצר בהצלחה');
+        
+        // On success, go to the main app
+        router.replace('/(tabs)'); 
+      } catch (error: any) {
+        console.error('Signup error:', error);
+        let errorMessage = 'שגיאה ביצירת החשבון';
+        
+        if (error.code === 'auth/email-already-in-use') {
+          errorMessage = 'האימייל כבר קיים במערכת';
+        } else if (error.code === 'auth/weak-password') {
+          errorMessage = 'הסיסמה חלשה מדי';
+        }
+        
+        setErrors({...errors, general: errorMessage});
+      }
     }
   };
 

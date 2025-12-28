@@ -1,15 +1,56 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { arrayUnion, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { auth, db } from './services/firebase';
 
 export default function TaskDetails() {
   const params = useLocalSearchParams();
   const { id, title, description, location, createdBy } = params;
 
-  const handleTakeTask = () => {
-    router.back();
-    setTimeout(() => {
-      Alert.alert('', 'בקשתך נשלחה');
-    }, 300);
+  const handleTakeTask = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        Alert.alert('שגיאה', 'עליך להיות מחובר כדי לקחת משימה');
+        return;
+      }
+
+      // שלוף את המשימה כדי לבדוק אם המשתמש כבר הגיש בקשה
+      const requestRef = doc(db, 'requests', id as string);
+      const requestSnap = await getDoc(requestRef);
+      
+      if (requestSnap.exists()) {
+        const requestData = requestSnap.data();
+        const interestedTaskers = requestData.interestedTaskers || [];
+        
+        // בדוק אם המשתמש כבר נמצא ברשימה
+        const alreadyApplied = interestedTaskers.some(
+          (tasker: any) => tasker.taskerId === user.uid
+        );
+        
+        if (alreadyApplied) {
+          Alert.alert('', 'כבר נשלחה בקשה למשימה זו');
+          return;
+        }
+      }
+
+      // הוסף את המשתמש לרשימת המעוניינים
+      await updateDoc(requestRef, {
+        interestedTaskers: arrayUnion({
+          taskerId: user.uid,
+          taskerName: user.displayName || user.email || 'לא ידוע',
+          timestamp: new Date().toISOString()
+        })
+      });
+
+      router.back();
+      setTimeout(() => {
+        Alert.alert('', 'בקשתך נשלחה');
+      }, 300);
+    } catch (error) {
+      console.error('Error taking task:', error);
+      Alert.alert('שגיאה', 'לא הצלחנו לשלוח את הבקשה');
+    }
   };
 
   return (

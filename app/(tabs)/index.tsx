@@ -1,12 +1,37 @@
 import { router } from "expo-router";
 import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import { Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { db } from "../services/firebase";
 
 export default function FrontPage() {
   const [taskerMode, setTaskerMode] = useState(false);
   const [requests, setRequests] = useState<any[]>([]);
+  const [hiddenRequests, setHiddenRequests] = useState<Set<string>>(new Set());
+  const [selectedTasker, setSelectedTasker] = useState<any>(null);
+  const [showTaskerModal, setShowTaskerModal] = useState(false);
+
+  const openTaskerDetails = (tasker: any) => {
+    setSelectedTasker(tasker);
+    setShowTaskerModal(true);
+  };
+
+  const closeTaskerModal = () => {
+    setShowTaskerModal(false);
+    setSelectedTasker(null);
+  };
+
+  const toggleRequestVisibility = (requestId: string) => {
+    setHiddenRequests(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(requestId)) {
+        newSet.delete(requestId);
+      } else {
+        newSet.add(requestId);
+      }
+      return newSet;
+    });
+  };
 
   useEffect(() => {
     // אם במצב Tasker - שלוף רק בקשות פתוחות, אחרת שלוף הכל
@@ -111,11 +136,37 @@ export default function FrontPage() {
                   openRequests.map((r) => (
                     <View key={r.id} style={styles.requestItem}>
                       <View style={styles.requestHeader}>
+                        <TouchableOpacity 
+                          style={styles.closeButton}
+                          onPress={() => toggleRequestVisibility(r.id)}
+                        >
+                          <Text style={styles.closeButtonText}>
+                            {hiddenRequests.has(r.id) ? 'הצג בקשות' : 'הסתר בקשות'}
+                          </Text>
+                        </TouchableOpacity>
                         <TouchableOpacity style={styles.editButton}>
                           <Text style={styles.editButtonText}>ערוך</Text>
                         </TouchableOpacity>
                         <Text style={styles.requestTitle}>{r.title}</Text>
                       </View>
+                      {!hiddenRequests.has(r.id) && r.interestedTaskers && r.interestedTaskers.length > 0 && (
+                        <View style={styles.interestedTaskersContainer}>
+                          <Text style={styles.interestedTaskersTitle}>מעוניינים:</Text>
+                          {r.interestedTaskers.map((tasker: any, index: number) => (
+                            <View key={index} style={styles.interestedTaskerRow}>
+                              <TouchableOpacity 
+                                style={styles.showTaskerButton}
+                                onPress={() => openTaskerDetails(tasker)}
+                              >
+                                <Text style={styles.showTaskerButtonText}>הצג</Text>
+                              </TouchableOpacity>
+                              <Text style={styles.interestedTaskerName}>
+                                {tasker.taskerName}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
                     </View>
                   ))
                 ) : (
@@ -153,6 +204,78 @@ export default function FrontPage() {
           {taskerMode ? "עבור למצב מקבל יד" : "עבור למצב נותן יד"}
         </Text>
       </View>
+
+      {/* Modal להצגת פרטי Tasker */}
+      <Modal
+        visible={showTaskerModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeTaskerModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={closeTaskerModal} style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>פרטי מועמד</Text>
+            </View>
+
+            {selectedTasker && (
+              <View style={styles.modalBody}>
+                {/* תמונת פרופיל */}
+                <View style={styles.profileImageContainer}>
+                  <Image
+                    source={selectedTasker.profileImage ? { uri: selectedTasker.profileImage } : require('../../assets/images/react-logo.png')}
+                    style={styles.profileImage}
+                  />
+                </View>
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalNameText}>{selectedTasker.taskerName}</Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalRatingText}>
+                    {selectedTasker.rating ? `⭐ ${selectedTasker.rating}/5` : 'טרם דורג'}
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalLabel}>זמן בקשה</Text>
+                  <Text style={styles.modalInfoText}>
+                    {selectedTasker.timestamp ? new Date(selectedTasker.timestamp).toLocaleString('he-IL', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    }) : 'לא זמין'}
+                  </Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalLabel}>טלפון</Text>
+                  <Text style={styles.modalInfoText}>
+                    {selectedTasker.phone || 'לא קיים טלפון'}
+                  </Text>
+                </View>
+
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalLabel}>חוות דעת</Text>
+                  <Text style={styles.modalInfoText}>
+                    {selectedTasker.review || 'טרם ניתנה חוות דעת'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <TouchableOpacity style={styles.modalAcceptButton} onPress={closeTaskerModal}>
+              <Text style={styles.modalAcceptButtonText}>סגור</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );
@@ -282,6 +405,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: 8,
   },
 
   editButton: {
@@ -292,6 +416,19 @@ const styles = StyleSheet.create({
   },
 
   editButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  closeButton: {
+    backgroundColor: "#6f411d",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+
+  closeButtonText: {
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
@@ -401,5 +538,169 @@ const styles = StyleSheet.create({
     color: "#999",
     textAlign: "center",
     marginTop: 40,
+  },
+
+  interestedTaskersContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+  },
+
+  interestedTaskersTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#588157",
+    textAlign: "right",
+    marginBottom: 6,
+  },
+
+  interestedTaskerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 24,
+  },
+
+  interestedTaskerName: {
+    fontSize: 14,
+    color: "#333",
+    textAlign: "right",
+    flex: 1,
+  },
+
+  showTaskerButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 10,
+  },
+
+  showTaskerButtonText: {
+    color: "#588157",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '85%',
+    maxWidth: 400,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+
+  modalCloseButton: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+
+  modalCloseText: {
+    fontSize: 24,
+    color: '#333',
+    fontWeight: '600',
+  },
+
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#6f411d',
+  },
+
+  modalBody: {
+    marginBottom: 20,
+  },
+
+  profileImageContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: '#588157',
+  },
+
+  modalSection: {
+    marginBottom: 16,
+  },
+
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#888',
+    marginBottom: 6,
+    textAlign: 'right',
+  },
+
+  modalValue: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'right',
+    backgroundColor: '#f9f9f9',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+
+  modalNameText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+
+  modalRatingText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+
+  modalInfoText: {
+    fontSize: 15,
+    color: '#333',
+    textAlign: 'right',
+    backgroundColor: 'transparent',
+  },
+
+  modalAcceptButton: {
+    backgroundColor: '#588157',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+
+  modalAcceptButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
