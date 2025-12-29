@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'; // Import this
+import { auth } from './services/firebase'; // Import your configured auth instance
 import { 
   StyleSheet, 
   TextInput, 
@@ -64,13 +66,32 @@ export default function SignupScreen() {
     return isValid;
   };
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     if (validate()) {
-      // TODO: Send data to your Backend (Firebase/Supabase) here
-      console.log('Signup Successful:', { fullName, email });
-      
-      // On success, go to the main app
-      router.replace('/(tabs)'); 
+      try {
+        // 1. Create the user in Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        
+        // 2. (Optional) Set the Display Name immediately
+        if (userCredential.user) {
+            await updateProfile(userCredential.user, { displayName: fullName });
+        }
+
+        console.log('User created:', userCredential.user.email);
+        
+        // 3. Navigate to the App
+        router.replace('/(tabs)'); 
+        
+      } catch (error: any) {
+        // Handle Firebase Errors specifically
+        if (error.code === 'auth/email-already-in-use') {
+            setErrors({...errors, email: 'This email is already registered.'});
+        } else if (error.code === 'auth/weak-password') {
+            setErrors({...errors, password: 'Password should be at least 6 chars.'});
+        } else {
+            setErrors({...errors, general: error.message});
+        }
+      }
     }
   };
 

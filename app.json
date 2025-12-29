@@ -4,7 +4,7 @@
     "slug": "QuickSolve",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/Hands-Hand-icon.png",
     "scheme": "quicksolve",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,

@@ -1,6 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router'; // Used for navigation
 import React, { useState } from 'react';
+import { signInWithEmailAndPassword } from 'firebase/auth'; // Import this
+import { auth } from './services/firebase'; // Import your configured auth instance
+import { Alert } from 'react-native';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -18,16 +21,28 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleLogin = () => {
-    // TODO: Add actual authentication logic here
-    console.log('Logging in with:', email, password);
-    
-    // For now, navigate to the main dashboard upon "success"
-    // Assuming you move the previous Home screen to a file named 'dashboard' or inside (tabs)
-    // Navigate to the front page inside the (tabs) group
-    // The route path maps to the filename `FrontPage.tsx` (lowercased by the router).
-    // If your router uses a different path, change the string accordingly (e.g. '/frontpage' or '/front-page').
-    router.replace('/(tabs)');
+  const handleLogin = async () => {
+    if (!email || !password) {
+        Alert.alert('Error', 'Please enter both email and password.');
+        return;
+    }
+
+    try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        console.log('Logged in as:', userCredential.user.email);
+        
+        // Navigate to dashboard
+        router.replace('/(tabs)');
+        
+    } catch (error: any) {
+        let msg = error.message;
+        if (error.code === 'auth/invalid-credential') {
+            msg = 'Invalid email or password.';
+        } else if (error.code === 'auth/user-not-found') {
+            msg = 'No account found with this email.';
+        }
+        Alert.alert('Login Failed', msg);
+    }
   };
 
   return (
