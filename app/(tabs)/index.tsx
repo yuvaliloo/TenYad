@@ -1,8 +1,8 @@
 import { router } from "expo-router";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
-import { db } from "../services/firebase";
+import { auth, db } from "../services/firebase";
 
 export default function FrontPage() {
   const [taskerMode, setTaskerMode] = useState(false);
@@ -10,15 +10,33 @@ export default function FrontPage() {
   const [hiddenRequests, setHiddenRequests] = useState<Set<string>>(new Set());
   const [selectedTasker, setSelectedTasker] = useState<any>(null);
   const [showTaskerModal, setShowTaskerModal] = useState(false);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
-  const openTaskerDetails = (tasker: any) => {
+  const openTaskerDetails = (tasker: any, requestId: string) => {
     setSelectedTasker(tasker);
+    setSelectedRequestId(requestId);
     setShowTaskerModal(true);
   };
 
   const closeTaskerModal = () => {
     setShowTaskerModal(false);
     setSelectedTasker(null);
+    setSelectedRequestId(null);
+  };
+
+  const acceptSelectedTasker = async () => {
+    try {
+      if (!selectedRequestId || !selectedTasker) return;
+      const requestRef = doc(db, "requests", selectedRequestId);
+      await updateDoc(requestRef, {
+        worker: selectedTasker.taskerName || selectedTasker.name || "",
+        workerId: selectedTasker.taskerId || selectedTasker.uid || null,
+        status: "closed"
+      });
+      closeTaskerModal();
+    } catch (err) {
+      console.warn("Failed to accept tasker:", err);
+    }
   };
 
   const toggleRequestVisibility = (requestId: string) => {
@@ -51,6 +69,22 @@ export default function FrontPage() {
   const openRequests = requests.filter((r) => !r.worker);
   const closedRequests = requests.filter((r) => !!r.worker);
   const [selectedTab, setSelectedTab] = useState<'open' | 'closed'>('open');
+
+  // פונקציה לקבלת ברכה לפי השעה
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    const userName = auth.currentUser?.displayName || "משתמש";
+    
+    if (hour >= 4 && hour < 12) {
+      return `בוקר טוב, ${userName}`;
+    } else if (hour >= 12 && hour < 18) {
+      return `צהריים טובים, ${userName}`;
+    } else if (hour >= 18 && hour < 22) {
+      return `ערב טוב, ${userName}`;
+    } else {
+      return `לילה טוב, ${userName}`;
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -96,7 +130,7 @@ export default function FrontPage() {
       ) : (
         <>
           {/* תוכן למצב Seeker */}
-          <Text style={styles.greeting}>צהריים טובים , ליאור</Text>
+          <Text style={styles.greeting}>{getGreeting()}</Text>
 
           {/* כפתור צור בקשה */}
           <View style={styles.buttonsContainer}>
@@ -156,7 +190,7 @@ export default function FrontPage() {
                             <View key={index} style={styles.interestedTaskerRow}>
                               <TouchableOpacity 
                                 style={styles.showTaskerButton}
-                                onPress={() => openTaskerDetails(tasker)}
+                                onPress={() => openTaskerDetails(tasker, r.id)}
                               >
                                 <Text style={styles.showTaskerButtonText}>הצג</Text>
                               </TouchableOpacity>
@@ -270,8 +304,12 @@ export default function FrontPage() {
               </View>
             )}
 
-            <TouchableOpacity style={styles.modalAcceptButton} onPress={closeTaskerModal}>
-              <Text style={styles.modalAcceptButtonText}>סגור</Text>
+            <TouchableOpacity style={styles.modalAcceptButton} onPress={acceptSelectedTasker}>
+              <Text style={styles.modalAcceptButtonText}>קבל מועמד</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCloseAction} onPress={closeTaskerModal}>
+              <Text style={styles.modalCloseActionText}>סגור</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -696,10 +734,24 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
+    marginBottom: 14,
   },
 
   modalAcceptButtonText: {
-    color: '#fff',
+    color: '#f6f6f6ff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  modalCloseAction: {
+    backgroundColor: 'transparent',
+    paddingVertical: 10,
+    alignItems: 'center',
+    // Extra space from the accept button
+    marginTop: 2,
+  },
+  modalCloseActionText: {
+    color: '#e74c3c',
     fontSize: 16,
     fontWeight: '600',
   },
