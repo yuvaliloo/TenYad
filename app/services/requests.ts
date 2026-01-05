@@ -37,7 +37,7 @@ export const createRequest = async (data: RequestData) => {
       
       // Status & Assignment
       status: "open",
-      worker: "WAITING_FOR_WORKER", // <--- CRITICAL: Allows query where("worker", "==", null) to work
+      worker: "OPEN", // <--- CRITICAL: Allows query where("worker", "==", null) to work
       
       // Metadata
       createdAt: serverTimestamp(),

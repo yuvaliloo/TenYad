@@ -9,6 +9,8 @@ dist/
 .env
 web-build/
 expo-env.d.ts
+packager.json
+package-lock.json
 
 # Native
 .kotlin/

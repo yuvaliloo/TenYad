@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import { initializeApp } from "firebase/app";
+import { initializeApp,getApp,getApps } from "firebase/app";
 import { 
   initializeAuth, 
   getReactNativePersistence, 
@@ -19,7 +19,7 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // 1. Determine which storage to use based on Platform
 let authPersistence;

@@ -30,6 +30,7 @@ export default function RootLayout() {
           gestureEnabled: false // Prevents swiping back to Login from the app
         }} 
       />
+      <Stack.Screen name="login" options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="new-request" options={{ presentation: 'modal', title: 'New Request' }} />
       <Stack.Screen name="task-details" options={{ presentation: 'modal', title: 'Task Details' }} />
       {/* 4. Handle 404s */}
