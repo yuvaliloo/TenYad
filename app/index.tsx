@@ -1,17 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router'; // Used for navigation
-import React, { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth'; // Import this
-import { auth } from './services/firebase'; // Import your configured auth instance
-import { Alert } from 'react-native';
+import React, { useState } from 'react';
 import {
-  KeyboardAvoidingView,
+  Alert, KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity
 } from 'react-native';
+import { auth } from './services/firebase'; // Import your configured auth instance
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
