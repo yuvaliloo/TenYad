@@ -2,7 +2,9 @@ import { router } from "expo-router";
 import { collection, doc, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import ReviewModal from '../../components/ReviewModal';
 import { auth, db } from "../services/firebase";
+import { getReviewsForUser, getReviewsWrittenByUser } from '../services/reviews';
 
 export default function FrontPage() {
   const [taskerMode, setTaskerMode] = useState(false);
@@ -11,6 +13,42 @@ export default function FrontPage() {
   const [selectedTasker, setSelectedTasker] = useState<any>(null);
   const [showTaskerModal, setShowTaskerModal] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewTask, setReviewTask] = useState<any>(null);
+  const [taskerReviews, setTaskerReviews] = useState<any[]>([]);
+  const [reviewedTaskIds, setReviewedTaskIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const fetchMyReviews = async () => {
+        const user = auth.currentUser;
+        if (user) {
+            const res = await getReviewsWrittenByUser(user.uid);
+            if (res.success) {
+                // Filter out reviews that don't have a taskId (if any)
+                const ids = new Set(res.reviews.filter(r => r.taskId).map(r => r.taskId!));
+                setReviewedTaskIds(ids);
+            }
+        }
+    };
+    fetchMyReviews();
+  }, [showReviewModal]); // Refresh whenever a review modal closes/opens
+
+  useEffect(() => {
+    if (selectedTasker && selectedTasker.taskerId) {
+      getReviewsForUser(selectedTasker.taskerId).then((res) => {
+        if (res.success) {
+          setTaskerReviews(res.reviews);
+        }
+      });
+    } else {
+      setTaskerReviews([]);
+    }
+  }, [selectedTasker]);
+
+  const openReviewModal = (task: any) => {
+    setReviewTask(task);
+    setShowReviewModal(true);
+  };
 
   const openTaskerDetails = (tasker: any, requestId: string) => {
     setSelectedTasker(tasker);
@@ -212,9 +250,27 @@ export default function FrontPage() {
                 <Text style={styles.sectionTitle}>משימות סגורות</Text>
                 {closedRequests.length > 0 ? (
                   closedRequests.map((r) => (
-                    <View key={r.id} style={styles.requestItem}>
-                      <Text style={styles.requestTitle}>{r.title}</Text>
-                      <Text style={styles.requestMeta}>עובד: {r.worker}</Text>
+                    <View key={r.id} style={[styles.requestItem, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                      <View>
+                        {r.workerId ? (
+                            reviewedTaskIds.has(r.id) ? (
+                                <Text style={{color: '#588157', fontSize: 14, fontWeight: '600'}}>
+                                    ✓ ביקורת נשלחה
+                                </Text>
+                            ) : (
+                                <TouchableOpacity 
+                                  style={styles.reviewButton} 
+                                  onPress={() => openReviewModal(r)}
+                                >
+                                  <Text style={styles.reviewButtonText}>דרג</Text>
+                                </TouchableOpacity>
+                            )
+                        ) : null}
+                      </View>
+                      <View style={{flex: 1, alignItems: 'flex-end', marginLeft: 12}}>
+                        <Text style={styles.requestTitle}>{r.title}</Text>
+                        <Text style={{fontSize: 12, color: "#666", marginTop: 4}}>עובד: {r.worker}</Text>
+                      </View>
                     </View>
                   ))
                 ) : (
@@ -296,10 +352,22 @@ export default function FrontPage() {
 
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalLabel}>חוות דעת</Text>
-                  <Text style={styles.modalInfoText}>
-                    {selectedTasker.review || 'טרם ניתנה חוות דעת'}
-                  </Text>
+                  <Text style={styles.modalLabel}>חוות דעת ({taskerReviews.length})</Text>
+                  {taskerReviews.length > 0 ? (
+                    taskerReviews.map((review, index) => (
+                      <View key={index} style={{marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 5}}>
+                         <Text style={{fontWeight: 'bold', textAlign: 'right'}}>{review.rating} ⭐</Text>
+                         {review.comment ? <Text style={{textAlign: 'right'}}>{review.comment}</Text> : null}
+                         {review.createdAt ? <Text style={{textAlign: 'right', fontSize: 10, color: '#888'}}>
+                            {new Date(review.createdAt.toDate ? review.createdAt.toDate() : review.createdAt).toLocaleDateString('he-IL')}
+                         </Text> : null}
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.modalInfoText}>
+                      {selectedTasker.review || 'טרם ניתנה חוות דעת'}
+                    </Text>
+                  )}
                 </View>
               </View>
             )}
@@ -314,6 +382,17 @@ export default function FrontPage() {
           </View>
         </View>
       </Modal>
+
+      {reviewTask && (
+        <ReviewModal
+          visible={showReviewModal}
+          onClose={() => setShowReviewModal(false)}
+          reviewedUserId={reviewTask.workerId}
+          reviewedUserName={reviewTask.worker}
+          taskTitle={reviewTask.title}
+          taskId={reviewTask.id}
+        />
+      )}
 
     </View>
   );
@@ -753,6 +832,19 @@ const styles = StyleSheet.create({
   modalCloseActionText: {
     color: '#e74c3c',
     fontSize: 16,
+    fontWeight: '600',
+  },
+
+  reviewButton: {
+    backgroundColor: '#6f411d',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+
+  reviewButtonText: {
+    color: '#ffffffff',
+    fontSize: 14,
     fontWeight: '600',
   },
 });

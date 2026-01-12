@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { signOut, updateProfile } from "firebase/auth";
-import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,6 +22,7 @@ export default function ProfileScreen() {
   const [newName, setNewName] = useState(user?.displayName || "");
   const [loading, setLoading] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [completedTasksCount, setCompletedTasksCount] = useState(0);
 
   // Update local state if auth changes
   useEffect(() => {
@@ -29,21 +30,44 @@ export default function ProfileScreen() {
     setNewName(auth.currentUser?.displayName || "");
   }, []);
 
+  // Fetch completed tasks count
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    // Check requests where I am the worker
+    const q = query(
+      collection(db, "requests"),
+      where("workerId", "==", user.uid)
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      setCompletedTasksCount(snapshot.size);
+    }, (error) => {
+      console.error("Error fetching completed tasks:", error);
+    });
+
+    return () => unsub();
+  }, [user?.uid]);
+
   // Fetch reviews for the current user
   useEffect(() => {
     if (!user?.uid) return;
 
     const q = query(
       collection(db, "reviews"),
-      where("reviewedUserId", "==", user.uid),
-      orderBy("createdAt", "desc")
+      where("reviewedUserId", "==", user.uid)
     );
 
     const unsub = onSnapshot(q, (snapshot) => {
       const reviewsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })) as any[]; // 👈 Force type to any[] for debugging
+      console.log("DEBUG: Current User ID:", user.uid);
+      console.log("DEBUG: Reviews found in Firestore:", reviewsData.length);
+      if (reviewsData.length > 0) {
+          console.log("DEBUG: First review reviewedUserId:", reviewsData[0].reviewedUserId);
+      }
       setReviews(reviewsData);
     }, (error) => {
       console.error("Error fetching reviews:", error);
@@ -160,14 +184,14 @@ export default function ProfileScreen() {
       {/* --- STATS CARDS (Placeholders for future logic) --- */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
-            <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>משימות</Text>
+            <Text style={styles.statNumber}>{completedTasksCount}</Text>
+            <Text style={styles.statLabel}>מונה משימות </Text>
         </View>
         <View style={styles.statCard}>
             <Text style={styles.statNumber}>
               {reviews.length > 0 
-                ? (reviews.reduce((sum, r) => sum + (r.rating || 0), 0) / reviews.length).toFixed(1)
-                : "5.0"}
+                ? (reviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / reviews.length).toFixed(1)
+                : "0.0"}
             </Text>
             <Text style={styles.statLabel}>דירוג</Text>
         </View>

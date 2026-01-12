@@ -1,4 +1,4 @@
-import { addDoc, collection, deleteDoc, doc, getDocs, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { db } from "./firebase";
 
 export interface Review {
@@ -37,7 +37,8 @@ export const getReviewsForUser = async (userId: string) => {
   try {
     const q = query(
       collection(db, "reviews"),
-      where("reviewedUserId", "==", userId)
+      where("reviewedUserId", "==", userId),
+      orderBy("createdAt", "desc")
     );
     const snapshot = await getDocs(q);
     const reviews = snapshot.docs.map(doc => ({
@@ -102,5 +103,26 @@ export const hasUserReviewedTask = async (reviewerId: string, taskId: string) =>
   } catch (error) {
     console.error("Error checking review status:", error);
     return { success: false, hasReviewed: false, error };
+  }
+};
+
+/**
+ * שליפת כל הביקורות שמשתמש כתב (כדי לדעת אילו משימות כבר דורגו)
+ */
+export const getReviewsWrittenByUser = async (reviewerId: string) => {
+  try {
+    const q = query(
+      collection(db, "reviews"),
+      where("reviewerId", "==", reviewerId)
+    );
+    const snapshot = await getDocs(q);
+    const reviews = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Review[];
+    return { success: true, reviews };
+  } catch (error) {
+    console.error("Error fetching written reviews:", error);
+    return { success: false, reviews: [], error };
   }
 };
