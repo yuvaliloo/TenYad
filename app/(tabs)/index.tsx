@@ -1,12 +1,13 @@
+import * as Location from 'expo-location';
 import { router } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
-import * as Location from 'expo-location'; 
-import { onAuthStateChanged } from "firebase/auth";
 
 // Imports from your specific project structure
 import ReviewModal from '../../components/ReviewModal';
+import PaymentModal from '../../components/PaymentModal';
 import { auth, db } from "../services/firebase";
 import { getReviewsForUser, getReviewsWrittenByUser } from '../services/reviews';
 
@@ -29,6 +30,7 @@ export default function FrontPage() {
 
   // Review System State (From Your Logic)
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [reviewTask, setReviewTask] = useState<any>(null);
   const [taskerReviews, setTaskerReviews] = useState<any[]>([]);
   const [reviewedTaskIds, setReviewedTaskIds] = useState<Set<string>>(new Set());
@@ -356,7 +358,7 @@ export default function FrontPage() {
                                   style={styles.reviewButton} 
                                   onPress={() => openReviewModal(r)}
                                 >
-                                  <Text style={styles.reviewButtonText}>דרג</Text>
+                                  <Text style={styles.reviewButtonText}>סמן כבוצע</Text>
                                 </TouchableOpacity>
                             )
                         ) : null}
@@ -468,10 +470,23 @@ export default function FrontPage() {
         <ReviewModal
           visible={showReviewModal}
           onClose={() => setShowReviewModal(false)}
+          onSuccess={() => {
+            setShowReviewModal(false);
+            setShowPaymentModal(true);
+          }}
           reviewedUserId={reviewTask.workerId}
           reviewedUserName={reviewTask.worker}
           taskTitle={reviewTask.title}
           taskId={reviewTask.id}
+        />
+      )}
+
+      {/* Payment Modal */}
+      {reviewTask && (
+        <PaymentModal
+          visible={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          taskerName={reviewTask.worker}
         />
       )}
 
@@ -516,15 +531,16 @@ const styles = StyleSheet.create({
   },
 
   greeting: {
-    marginTop: 40,
+    marginTop: 70,
     fontSize: 24,
-    textAlign: "center",
+    textAlign: "right",
+    marginRight: 12,
     fontWeight: "600",
     color: "#6f411d",
   },
 
   buttonsContainer: {
-    marginTop: 60, // Adjusted spacing
+    marginTop: 30, // Adjusted spacing
     alignItems: "center",
   },
 

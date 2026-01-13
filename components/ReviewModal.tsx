@@ -6,13 +6,14 @@ import { createReview } from '../app/services/reviews';
 interface ReviewModalProps {
   visible: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   reviewedUserId: string; // The user receiving the review (the worker)
   reviewedUserName?: string;
   taskTitle: string;
   taskId: string;
 }
 
-export default function ReviewModal({ visible, onClose, reviewedUserId, reviewedUserName, taskTitle, taskId }: ReviewModalProps) {
+export default function ReviewModal({ visible, onClose, onSuccess, reviewedUserId, reviewedUserName, taskTitle, taskId }: ReviewModalProps) {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
@@ -49,7 +50,11 @@ export default function ReviewModal({ visible, onClose, reviewedUserId, reviewed
       Alert.alert('תודה!', 'הביקורת נשמרה בהצלחה');
       setComment('');
       setRating(5);
-      onClose();
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        onClose();
+      }
     } else {
       Alert.alert('שגיאה', `לא ניתן היה לשמור את הביקורת\nהודעת שגיאה: ${result.error}`);
     }
@@ -87,8 +92,14 @@ export default function ReviewModal({ visible, onClose, reviewedUserId, reviewed
               />
 
               <View style={styles.buttons}>
-                <TouchableOpacity onPress={onClose} style={styles.cancelButton} disabled={loading}>
-                  <Text style={styles.cancelButtonText}>ביטול</Text>
+                <TouchableOpacity onPress={() => {
+                  if (onSuccess) {
+                    onSuccess();
+                  } else {
+                    onClose();
+                  }
+                }} style={styles.cancelButton} disabled={loading}>
+                  <Text style={styles.cancelButtonText}>אולי אחר כך</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity onPress={handleSubmit} style={styles.submitButton} disabled={loading}>

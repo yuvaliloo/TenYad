@@ -1,10 +1,13 @@
 import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 export default function RootLayout() {
   return (
-    <Stack>
-      {/* 1. The Login Screen (Root) */}
+    <>
+      <StatusBar style="dark" />
+      <Stack>
+        {/* 1. The Login Screen (Root) */}
       <Stack.Screen 
         name="index" 
         options={{ 
@@ -38,5 +41,6 @@ export default function RootLayout() {
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="reset-password" options={{ headerShown: false }} />
     </Stack>
+    </>
   );
 }

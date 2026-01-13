@@ -19,6 +19,8 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
+
+
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // 1. Determine which storage to use based on Platform
