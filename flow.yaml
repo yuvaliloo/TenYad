@@ -1,0 +1,39 @@
+appId: host.exp.exponent # ⚠️ CHANGE THIS to match your package name in app.json
+---
+- launchApp:
+    clearState: true
+
+# --- SCENE 1: LOGIN ---
+- assertVisible: "TenYad"
+- tapOn:
+    id: "email_input"
+- inputText: "test@gmail.com"  # ⚠️ Make sure this user exists in Firebase!
+- tapOn:
+    id: "password_input"
+- inputText: "123456"
+- hideKeyboard
+- tapOn:
+    id: "login_button"
+
+# --- SCENE 2: HOME (TABS) ---
+# Wait for login to finish
+- extendedWaitUntil:
+    visible: "Welcome back" # Or any text that appears on your home screen
+    timeout: 10000
+
+# --- SCENE 3: PROFILE & LOGOUT ---
+# Tap the "Profile" tab at the bottom
+- tapOn: "Profile" 
+
+# Verify we are on the profile screen (Using the Hebrew text from your code)
+- assertVisible: "ערוך פרופיל" 
+
+# Click Logout
+- tapOn:
+    id: "logout_button"
+
+# Handle the Alert Popup (Click "Get Out" / "Disconnect")
+- tapOn: "התנתק" 
+
+# --- SCENE 4: VERIFY LOGOUT ---
+- assertVisible: "Log In"

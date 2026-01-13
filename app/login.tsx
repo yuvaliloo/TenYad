@@ -91,6 +91,7 @@ export default function LoginScreen() {
         <ThemedView style={styles.formContainer}>
           <ThemedText type="defaultSemiBold" style={styles.label} >Email</ThemedText>
           <TextInput
+            testID="email_input"
             style={styles.input}
             placeholder="example@example.com"
             placeholderTextColor="#888"
@@ -102,6 +103,7 @@ export default function LoginScreen() {
 
           <ThemedText type="defaultSemiBold" style={styles.label}>Password</ThemedText>
           <TextInput
+            testID="password_input"
             style={styles.input}
             placeholder="********"
             placeholderTextColor="#888"
@@ -111,7 +113,8 @@ export default function LoginScreen() {
           />
 
           <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-            <ThemedText style={styles.loginButtonText}>Log In</ThemedText>
+          
+            <ThemedText style={styles.loginButtonText} testID="login_button">Log In</ThemedText>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.push('/forgot-password')}>

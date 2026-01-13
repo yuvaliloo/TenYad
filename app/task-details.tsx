@@ -1,9 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { arrayUnion, doc, getDoc, updateDoc } from 'firebase/firestore';
+import {useState} from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from './services/firebase';
 
 export default function TaskDetails() {
+    const [userName, setUserName] = useState("אורח");
   const params = useLocalSearchParams();
   const { id, title, description, location, createdBy } = params;
 

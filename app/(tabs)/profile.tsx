@@ -162,6 +162,7 @@ export default function ProfileScreen() {
         <TouchableOpacity 
             style={[styles.actionButton, styles.logoutButton]} 
             onPress={handleLogout}
+            testID="logout_button"
         >
             <Text style={[styles.buttonText, styles.logoutText]}>התנתק</Text>
         </TouchableOpacity>
