@@ -1,42 +1,54 @@
 import { router } from "expo-router";
-import { collection, onSnapshot, orderBy, query, where, doc, updateDoc } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import * as Location from 'expo-location'; 
 import { onAuthStateChanged } from "firebase/auth";
-import { db, auth } from "../services/firebase";
+
+// Imports from your specific project structure
+import ReviewModal from '../../components/ReviewModal';
+import { auth, db } from "../services/firebase";
+import { getReviewsForUser, getReviewsWrittenByUser } from '../services/reviews';
 
 export default function FrontPage() {
+  // --- STATE ---
   const [taskerMode, setTaskerMode] = useState(false);
   const [requests, setRequests] = useState<any[]>([]);
-  const [userName, setUserName] = useState("אורח");
-  const [myLocation, setMyLocation] = useState<{lat: number, lng: number} | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState("אורח");
+  
+  // Location State (From Friend's Logic)
+  const [myLocation, setMyLocation] = useState<{lat: number, lng: number} | null>(null);
+
+  // Seeker Logic State (From Your Logic)
   const [hiddenRequests, setHiddenRequests] = useState<Set<string>>(new Set());
   const [selectedTasker, setSelectedTasker] = useState<any>(null);
   const [showTaskerModal, setShowTaskerModal] = useState(false);
-
-  // Filter tabs for Seeker Mode
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<'open' | 'closed'>('open');
 
+  // Review System State (From Your Logic)
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewTask, setReviewTask] = useState<any>(null);
+  const [taskerReviews, setTaskerReviews] = useState<any[]>([]);
+  const [reviewedTaskIds, setReviewedTaskIds] = useState<Set<string>>(new Set());
+
+  // --- EFFECTS ---
+
+  // 1. Auth, Location & Main Data Fetching (Merged Logic)
   useEffect(() => {
     let firestoreUnsub: (() => void) | undefined;
 
-    // 1. Listen to Auth State (Waits for Firebase to initialize)
     const authUnsub = onAuthStateChanged(auth, async (user) => {
-      
-      // GUARD: If not logged in, stop loading and do nothing
       if (!user) {
         setLoading(false);
         return;
       }
 
-      // If we have a user, set the name
       if (user.displayName) setUserName(user.displayName);
-      
       setLoading(true);
 
-      // 2. Get Location
+      // Get Location (Friend's Logic)
       let myCoords = null;
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -49,17 +61,18 @@ export default function FrontPage() {
         console.log("Location skipped:", err);
       }
 
-      // 3. Define Query
+      // Define Query based on Mode
       let q;
       if (taskerMode) {
-        // TASKER: Get ALL open jobs
+        // TASKER MODE: Get all open jobs (Friend's query logic + Your status logic)
+        // We look for status 'open' OR worker 'OPEN' (handling both data versions)
         q = query(
           collection(db, "requests"), 
-          where("status", "==", "open"),
-          where("worker", "==", "OPEN"), 
+          where("status", "==", "open"), // Ensure we only see open requests
+          orderBy("createdAt", "desc")
         );
       } else {
-        // SEEKER: Get ONLY my jobs
+        // SEEKER MODE: Get ONLY my jobs (Your logic)
         q = query(
           collection(db, "requests"), 
           where("seekerId", "==", user.uid),
@@ -67,15 +80,14 @@ export default function FrontPage() {
         );
       }
 
-      // 4. Listen to Realtime Updates
-      // We assign this to a variable so we can clean it up later
       firestoreUnsub = onSnapshot(q, (snap) => {
         const currentUserId = user.uid;
 
         let items = snap.docs.map((d) => {
           const data = d.data();
+          // Calculate Distance (Friend's Logic)
           let dist = Infinity;
-          if (data.location && myCoords) {
+          if (data.location && data.location.latitude && myCoords) {
              dist = getDistanceFromLatLonInKm(
                myCoords.lat, myCoords.lng,
                data.location.latitude, data.location.longitude
@@ -85,9 +97,10 @@ export default function FrontPage() {
         });
 
         if (taskerMode) {
-          // TASKER: Filter out my own requests & sort by distance
+          // TASKER FILTER: Remove own requests, Filter only unassigned tasks, Sort by distance
           items = items
             .filter((item: any) => item.seekerId !== currentUserId)
+            .filter((item: any) => !item.worker || item.worker === "OPEN") // Handle both null and "OPEN" string
             .sort((a, b) => a.distance - b.distance);
         } 
         
@@ -97,55 +110,97 @@ export default function FrontPage() {
         console.warn("Firestore Error:", err);
         setLoading(false);
       });
-
     });
 
-    // Cleanup: Unsubscribe from Auth AND Firestore when component unmounts
     return () => {
       authUnsub();
       if (firestoreUnsub) firestoreUnsub();
     };
-
   }, [taskerMode]);
-  const openTaskerDetails = (tasker: any) => {
+
+  // 2. Fetch My Written Reviews (Your Logic)
+  useEffect(() => {
+    const fetchMyReviews = async () => {
+        const user = auth.currentUser;
+        if (user) {
+            const res = await getReviewsWrittenByUser(user.uid);
+            if (res.success) {
+                const ids = new Set(res.reviews.filter(r => r.taskId).map(r => r.taskId!));
+                setReviewedTaskIds(ids);
+            }
+        }
+    };
+    fetchMyReviews();
+  }, [showReviewModal]); 
+
+  // 3. Fetch Reviews for Selected Tasker (Your Logic)
+  useEffect(() => {
+    if (selectedTasker && (selectedTasker.taskerId || selectedTasker.uid)) {
+      const tId = selectedTasker.taskerId || selectedTasker.uid;
+      getReviewsForUser(tId).then((res) => {
+        if (res.success) {
+          setTaskerReviews(res.reviews);
+        }
+      });
+    } else {
+      setTaskerReviews([]);
+    }
+  }, [selectedTasker]);
+
+  // --- HELPER FUNCTIONS ---
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour >= 4 && hour < 12) return `בוקר טוב, ${userName}`;
+    if (hour >= 12 && hour < 18) return `צהריים טובים, ${userName}`;
+    if (hour >= 18 && hour < 22) return `ערב טוב, ${userName}`;
+    return `לילה טוב, ${userName}`;
+  };
+
+  const openReviewModal = (task: any) => {
+    setReviewTask(task);
+    setShowReviewModal(true);
+  };
+
+  const openTaskerDetails = (tasker: any, requestId: string) => {
     setSelectedTasker(tasker);
+    setSelectedRequestId(requestId);
     setShowTaskerModal(true);
   };
 
   const closeTaskerModal = () => {
     setShowTaskerModal(false);
     setSelectedTasker(null);
+    setSelectedRequestId(null);
+  };
+
+  const acceptSelectedTasker = async () => {
+    try {
+      if (!selectedRequestId || !selectedTasker) return;
+      const requestRef = doc(db, "requests", selectedRequestId);
+      await updateDoc(requestRef, {
+        worker: selectedTasker.taskerName || selectedTasker.name || "",
+        workerId: selectedTasker.taskerId || selectedTasker.uid || null,
+        status: "closed"
+      });
+      closeTaskerModal();
+    } catch (err) {
+      console.warn("Failed to accept tasker:", err);
+    }
   };
 
   const toggleRequestVisibility = (requestId: string) => {
     setHiddenRequests(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(requestId)) {
-        newSet.delete(requestId);
-      } else {
-        newSet.add(requestId);
-      }
+      if (newSet.has(requestId)) newSet.delete(requestId);
+      else newSet.add(requestId);
       return newSet;
     });
   };
-  const openTaskDetails = (request: any) => {
-    // Navigate to the modal, passing the data as parameters
-    router.push({
-      pathname: "./task-details",
-      params: { 
-        id: request.id,
-        title: request.title,
-        description: request.description,
-        price: request.price || "0", // Example if you have price
-        distance: request.distance,
-        address: request.address
-      }
-    });
-  };
-  // 👇 FIX 2: Correct logic for "Open" vs "Closed" 
-  // Since worker is now a string "OPEN", checking !r.worker would fail.
-  const openRequests = requests.filter((r) => r.worker === "OPEN");
-  const closedRequests = requests.filter((r) => r.worker !== "OPEN");
+
+  // Seeker Filters
+  const myOpenRequests = requests.filter((r) => !r.worker || r.worker === "OPEN");
+  const myClosedRequests = requests.filter((r) => r.worker && r.worker !== "OPEN");
 
   return (
     <View style={styles.container}>
@@ -164,22 +219,36 @@ export default function FrontPage() {
                 requests.map((r) => (
                   <View key={r.id} style={styles.taskerRequestCard}>
                     
-                    {/* Header: Distance + Title */}
+                    {/* Header: Distance Badge + Title */}
                     <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5}}>
                         <Text style={styles.distanceBadge}>
-                          {r.distance !== Infinity ? `📍 ${r.distance.toFixed(1)} km` : "📍 ? km"}
+                          {r.distance !== Infinity ? `📍 ${r.distance.toFixed(1)} ק"מ` : "📍 ? ק\"מ"}
                         </Text>
                         <Text style={styles.taskerRequestTitle}>{r.title}</Text>
                     </View>
 
-                    {r.description && (
+                    {/* Description */}
+                    {/* {r.description && (
                       <Text style={styles.taskerRequestDescription} numberOfLines={2}>
                         {r.description}
                       </Text>
-                    )}
-                    <TouchableOpacity style={styles.taskerTakeButton}
-                    onPress={() => openTaskDetails(r)}>
-                      <Text style={styles.taskerTakeButtonText}>קח משימה</Text>
+                    )} */}
+
+                    <TouchableOpacity 
+                      style={styles.taskerTakeButton}
+                      onPress={() => router.push({
+                        pathname: '/task-details',
+                        params: {
+                          id: r.id,
+                          title: r.title,
+                          description: r.description || '',
+                          location: r.location || '',
+                          createdBy: r.createdBy || '',
+                          distance: r.distance // Pass distance to details
+                        }
+                      })}
+                    >
+                      <Text style={styles.taskerTakeButtonText}>הצג משימה</Text>
                     </TouchableOpacity>
                   </View>
                 ))
@@ -192,7 +261,7 @@ export default function FrontPage() {
       ) : (
         /* --- SEEKER MODE UI --- */
         <>
-          <Text style={styles.greeting}>צהריים טובים, {userName}</Text>
+          <Text style={styles.greeting}>{getGreeting()}</Text>
 
           <View style={styles.buttonsContainer}>
             <TouchableOpacity 
@@ -200,11 +269,11 @@ export default function FrontPage() {
               onPress={() => router.push("/new-request")}
             >
               <Text style={styles.plusIcon}>+</Text>
-              <Text style={styles.buttonPrimaryText}>צור בקשה חדשה</Text>
+              <Text style={styles.buttonPrimaryText}>צור משימה חדשה</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Tabs */}
+          {/* Tabs (Open / Closed) */}
           <View style={styles.segmentedContainer}>
             <View style={styles.segment}>
               <TouchableOpacity
@@ -222,13 +291,13 @@ export default function FrontPage() {
             </View>
           </View>
 
-          {/* Seeker List */}
+          {/* Lists Container */}
           <ScrollView style={styles.listsContainer}>
             {selectedTab === 'open' ? (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>משימות פתוחות</Text>
-                {openRequests.length > 0 ? (
-                  openRequests.map((r) => (
+                {myOpenRequests.length > 0 ? (
+                  myOpenRequests.map((r) => (
                     <View key={r.id} style={styles.requestItem}>
                       <View style={styles.requestHeader}>
                         <TouchableOpacity 
@@ -244,6 +313,8 @@ export default function FrontPage() {
                         </TouchableOpacity>
                         <Text style={styles.requestTitle}>{r.title}</Text>
                       </View>
+                      
+                      {/* Interested Taskers List */}
                       {!hiddenRequests.has(r.id) && r.interestedTaskers && r.interestedTaskers.length > 0 && (
                         <View style={styles.interestedTaskersContainer}>
                           <Text style={styles.interestedTaskersTitle}>מעוניינים:</Text>
@@ -251,7 +322,7 @@ export default function FrontPage() {
                             <View key={index} style={styles.interestedTaskerRow}>
                               <TouchableOpacity 
                                 style={styles.showTaskerButton}
-                                onPress={() => openTaskerDetails(tasker)}
+                                onPress={() => openTaskerDetails(tasker, r.id)}
                               >
                                 <Text style={styles.showTaskerButtonText}>הצג</Text>
                               </TouchableOpacity>
@@ -271,11 +342,29 @@ export default function FrontPage() {
             ) : (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>משימות סגורות</Text>
-                {closedRequests.length > 0 ? (
-                  closedRequests.map((r) => (
-                    <View key={r.id} style={styles.requestItem}>
-                      <Text style={styles.requestTitle}>{r.title}</Text>
-                      <Text style={styles.requestMeta}>עובד: {r.worker}</Text>
+                {myClosedRequests.length > 0 ? (
+                  myClosedRequests.map((r) => (
+                    <View key={r.id} style={[styles.requestItem, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+                      <View>
+                        {r.workerId ? (
+                            reviewedTaskIds.has(r.id) ? (
+                                <Text style={{color: '#588157', fontSize: 14, fontWeight: '600'}}>
+                                    ✓ ביקורת נשלחה
+                                </Text>
+                            ) : (
+                                <TouchableOpacity 
+                                  style={styles.reviewButton} 
+                                  onPress={() => openReviewModal(r)}
+                                >
+                                  <Text style={styles.reviewButtonText}>דרג</Text>
+                                </TouchableOpacity>
+                            )
+                        ) : null}
+                      </View>
+                      <View style={{flex: 1, alignItems: 'flex-end', marginLeft: 12}}>
+                        <Text style={styles.requestTitle}>{r.title}</Text>
+                        <Text style={{fontSize: 12, color: "#666", marginTop: 4}}>עובד: {r.worker}</Text>
+                      </View>
                     </View>
                   ))
                 ) : (
@@ -287,7 +376,7 @@ export default function FrontPage() {
         </>
       )}
 
-      {/* מתג למצב נותן יד / מקבל יד */}
+      {/* Helper Switch */}
       <View style={styles.helperSwitchContainer}>
         <Switch
           value={taskerMode}
@@ -300,7 +389,7 @@ export default function FrontPage() {
         </Text>
       </View>
 
-      {/* Modal להצגת פרטי Tasker */}
+      {/* Tasker Details Modal (With Accept Logic) */}
       <Modal
         visible={showTaskerModal}
         transparent={true}
@@ -318,7 +407,6 @@ export default function FrontPage() {
 
             {selectedTasker && (
               <View style={styles.modalBody}>
-                {/* תמונת פרופיל */}
                 <View style={styles.profileImageContainer}>
                   <Image
                     source={selectedTasker.profileImage ? { uri: selectedTasker.profileImage } : require('../../assets/images/react-logo.png')}
@@ -336,47 +424,62 @@ export default function FrontPage() {
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalLabel}>זמן בקשה</Text>
-                  <Text style={styles.modalInfoText}>
-                    {selectedTasker.timestamp ? new Date(selectedTasker.timestamp).toLocaleString('he-IL', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    }) : 'לא זמין'}
-                  </Text>
-                </View>
-
-                <View style={styles.modalSection}>
                   <Text style={styles.modalLabel}>טלפון</Text>
                   <Text style={styles.modalInfoText}>
                     {selectedTasker.phone || 'לא קיים טלפון'}
                   </Text>
                 </View>
 
-
+                {/* Reviews List */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalLabel}>חוות דעת</Text>
-                  <Text style={styles.modalInfoText}>
-                    {selectedTasker.review || 'טרם ניתנה חוות דעת'}
-                  </Text>
+                  <Text style={styles.modalLabel}>חוות דעת ({taskerReviews.length})</Text>
+                  {taskerReviews.length > 0 ? (
+                    taskerReviews.map((review, index) => (
+                      <View key={index} style={{marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 5}}>
+                         <Text style={{fontWeight: 'bold', textAlign: 'right'}}>{review.rating} ⭐</Text>
+                         {review.comment ? <Text style={{textAlign: 'right'}}>{review.comment}</Text> : null}
+                         {review.createdAt ? <Text style={{textAlign: 'right', fontSize: 10, color: '#888'}}>
+                           {new Date(review.createdAt.toDate ? review.createdAt.toDate() : review.createdAt).toLocaleDateString('he-IL')}
+                         </Text> : null}
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.modalInfoText}>
+                      {selectedTasker.review || 'טרם ניתנה חוות דעת'}
+                    </Text>
+                  )}
                 </View>
               </View>
             )}
 
-            <TouchableOpacity style={styles.modalAcceptButton} onPress={closeTaskerModal}>
-              <Text style={styles.modalAcceptButtonText}>סגור</Text>
+            <TouchableOpacity style={styles.modalAcceptButton} onPress={acceptSelectedTasker}>
+              <Text style={styles.modalAcceptButtonText}>קבל מועמד</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalCloseAction} onPress={closeTaskerModal}>
+              <Text style={styles.modalCloseActionText}>סגור</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
+      {/* Review Modal */}
+      {reviewTask && (
+        <ReviewModal
+          visible={showReviewModal}
+          onClose={() => setShowReviewModal(false)}
+          reviewedUserId={reviewTask.workerId}
+          reviewedUserName={reviewTask.worker}
+          taskTitle={reviewTask.title}
+          taskId={reviewTask.id}
+        />
+      )}
+
     </View>
   );
 }
 
-// --- MATH HELPERS ---
+// --- MATH HELPERS (From Friend) ---
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   var R = 6371; 
   var dLat = deg2rad(lat2 - lat1);
@@ -401,7 +504,7 @@ const styles = StyleSheet.create({
   },
 
   topRow: {
-    flexDirection: "column",  // ← אחד מעל השני
+    flexDirection: "column",
     alignItems: "flex-end",
     gap: 4,
   },
@@ -415,15 +518,13 @@ const styles = StyleSheet.create({
   greeting: {
     marginTop: 40,
     fontSize: 24,
-    top: 60, 
-    left: 80,
     textAlign: "center",
     fontWeight: "600",
     color: "#6f411d",
   },
 
   buttonsContainer: {
-    marginTop: 100,
+    marginTop: 60, // Adjusted spacing
     alignItems: "center",
   },
 
@@ -451,7 +552,7 @@ const styles = StyleSheet.create({
   },
 
   segmentedContainer: {
-    marginTop: 18,
+    marginTop: 30,
     alignItems: 'center',
     width: '100%'
   },
@@ -568,7 +669,7 @@ const styles = StyleSheet.create({
 
   helperSwitchContainer: {
     position: "absolute",
-    top: 80,     // ← הורדנו למטה
+    top: 60,
     left: 20,
     alignItems: "center",
   },
@@ -580,7 +681,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // סטיילים למצב Tasker
+  // Tasker Mode Styles
   taskerHeader: {
     fontSize: 26,
     fontWeight: "700",
@@ -622,6 +723,7 @@ const styles = StyleSheet.create({
     color: "#333",
     textAlign: "right",
     marginBottom: 8,
+    flex: 1, // Allow text to wrap
   },
 
   taskerRequestDescription: {
@@ -636,6 +738,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: "center",
+    marginTop: 8,
   },
 
   taskerTakeButtonText: {
@@ -651,6 +754,19 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
 
+  // Distance Badge (Added from friend)
+  distanceBadge: { 
+    fontSize: 14, 
+    color: "#588157", 
+    fontWeight: "bold", 
+    backgroundColor: "#e9f5e9", 
+    paddingHorizontal: 8, 
+    paddingVertical: 4, 
+    borderRadius: 8, 
+    overflow: 'hidden' 
+  },
+
+  // Interested Taskers
   interestedTaskersContainer: {
     marginTop: 12,
     paddingTop: 12,
@@ -711,6 +827,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
+    maxHeight: '80%', // Limit height for scroll
   },
 
   modalHeader: {
@@ -807,12 +924,37 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
+    marginBottom: 14,
   },
 
   modalAcceptButtonText: {
-    color: '#fff',
+    color: '#f6f6f6ff',
     fontSize: 16,
     fontWeight: '600',
   },
-  distanceBadge: { fontSize: 14, color: "#588157", fontWeight: "bold", backgroundColor: "#e9f5e9", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, overflow: 'hidden' }
+
+  modalCloseAction: {
+    backgroundColor: 'transparent',
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  modalCloseActionText: {
+    color: '#e74c3c',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  reviewButton: {
+    backgroundColor: '#6f411d',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+
+  reviewButtonText: {
+    color: '#ffffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
