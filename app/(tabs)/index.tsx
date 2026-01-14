@@ -1,17 +1,18 @@
 import * as Location from 'expo-location';
 import { router } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 
 // Imports from your specific project structure
-import ReviewModal from '../../components/ReviewModal';
 import PaymentModal from '../../components/PaymentModal';
+import ReviewModal from '../../components/ReviewModal';
 import { auth, db } from "../services/firebase";
 import { getReviewsForUser, getReviewsWrittenByUser } from '../services/reviews';
 
 export default function FrontPage() {
+
   // --- STATE ---
   const [taskerMode, setTaskerMode] = useState(false);
   const [requests, setRequests] = useState<any[]>([]);
@@ -191,6 +192,29 @@ export default function FrontPage() {
     }
   };
 
+  const handleDeleteRequest = async (requestId: string) => {
+    Alert.alert(
+      "מחיקת משימה",
+      "האם אתה בטוח שברצונך למחוק את המשימה?",
+      [
+        { text: "ביטול", style: "cancel" },
+        {
+          text: "מחק",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, "requests", requestId));
+              // The onSnapshot listener will automatically update the list
+            } catch (err) {
+              Alert.alert("שגיאה", "לא ניתן למחוק את המשימה");
+              console.error("Error deleting request:", err);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const toggleRequestVisibility = (requestId: string) => {
     setHiddenRequests(prev => {
       const newSet = new Set(prev);
@@ -310,10 +334,12 @@ export default function FrontPage() {
                             {hiddenRequests.has(r.id) ? 'הצג בקשות' : 'הסתר בקשות'}
                           </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.editButton}>
-                          <Text style={styles.editButtonText}>ערוך</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.requestTitle}>{r.title}</Text>
+                        <TouchableOpacity 
+                          style={[styles.editButton, { backgroundColor: '#c0392b' }]}
+                          onPress={() => handleDeleteRequest(r.id)}
+                        >
+                          <Text style={styles.editButtonText}>הסר</Text>
+                        </TouchableOpacity>                        <Text style={styles.requestTitle}>{r.title}</Text>
                       </View>
                       
                       {/* Interested Taskers List */}
