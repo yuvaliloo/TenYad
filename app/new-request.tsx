@@ -1,24 +1,29 @@
-import { router } from "expo-router";
-import { useState, useEffect } from "react";
-import { 
-  ActivityIndicator, 
-  StyleSheet, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  View, 
-  Alert, 
-  ScrollView 
-} from "react-native";
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { db, auth } from './services/firebase'; 
-import { collection, addDoc, serverTimestamp, GeoPoint } from 'firebase/firestore';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { router } from "expo-router";
+import { addDoc, collection, GeoPoint, serverTimestamp } from 'firebase/firestore';
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
+import { auth, db } from './services/firebase';
 
 export default function NewRequestScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [address, setAddress] = useState(""); // <--- New Address State
   const [title, setTitle] = useState("");     // <--- New Title State
   const [description, setDescription] = useState("");
+  const [photo, setPhoto] = useState<string | null>(null); // <--- Photo State
+  const [paymentAmount, setPaymentAmount] = useState(""); // <--- Payment Amount State
   const [loading, setLoading] = useState(false);
   const [locationStatus, setLocationStatus] = useState("מאתר מיקום...");
 
@@ -40,6 +45,70 @@ export default function NewRequestScreen() {
       }
     })();
   }, []);
+
+  // Handle Payment Amount - Only Numbers
+  const handlePaymentChange = (text: string) => {
+    // Remove any non-numeric characters except decimal point
+    const numericValue = text.replace(/[^0-9.]/g, '');
+    // Ensure only one decimal point
+    const parts = numericValue.split('.');
+    const filteredValue = parts.length > 2 
+      ? parts[0] + '.' + parts.slice(1).join('')
+      : numericValue;
+    setPaymentAmount(filteredValue);
+  };
+
+  // Handle Camera/Photo Selection
+  const pickImage = async () => {
+    // Request camera permissions
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert("אין הרשאה", "אנא אפשר גישה למצלמה בהגדרות");
+      return;
+    }
+
+    // Show action sheet to choose camera or gallery
+    Alert.alert(
+      "בחר תמונה",
+      "מאיפה תרצה לבחור תמונה?",
+      [
+        {
+          text: "מצלמה",
+          onPress: async () => {
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: false,
+              aspect: [4, 3],
+              quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+              setPhoto(result.assets[0].uri);
+            }
+          },
+        },
+        {
+          text: "גלריה",
+          onPress: async () => {
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              allowsEditing: true,
+              aspect: [4, 3],
+              quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets[0]) {
+              setPhoto(result.assets[0].uri);
+            }
+          },
+        },
+        {
+          text: "ביטול",
+          style: "cancel",
+        },
+      ]
+    );
+  };
 
   const publish = async () => {
     if (!title || !description || !address) {
@@ -75,7 +144,8 @@ export default function NewRequestScreen() {
         
         createdAt: serverTimestamp(),
         location: locationData,   // <--- From Auto GPS
-        address: address          // <--- From Input
+        address: address,         // <--- From Input
+        paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null  // <--- Payment Amount
       });
 
       console.log("✅ Success! Request created.");
@@ -103,7 +173,7 @@ export default function NewRequestScreen() {
         value={title}
         onChangeText={setTitle}
         style={styles.inputSingle}
-        placeholder="לדוגמה: עזרה בהעברת דירה"
+        placeholder="עזרה בהעברת דירה"
         placeholderTextColor="#999"
         textAlign="right"
       />
@@ -114,7 +184,7 @@ export default function NewRequestScreen() {
         value={address}
         onChangeText={setAddress}
         style={styles.inputSingle}
-        placeholder="לדוגמה: תל אביב, רוטשילד 10"
+        placeholder="רוטשילד 10, תל אביב"
         placeholderTextColor="#999"
         textAlign="right"
       />
@@ -122,13 +192,48 @@ export default function NewRequestScreen() {
       {/* Location Status Text */}
       <Text style={styles.locationStatus}>{locationStatus}</Text>
 
+      {/* --- Photo Input --- */}
+      <Text style={styles.label}>תמונה</Text>
+      <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
+        <Text style={styles.photoButtonText}>
+          {photo ? "שנה תמונה" : "הוסף תמונה"}
+        </Text>
+      </TouchableOpacity>
+      
+      {photo && (
+        <View style={styles.imagePreviewContainer}>
+          <Image source={{ uri: photo }} style={styles.imagePreview} />
+          <TouchableOpacity
+            style={styles.removeImageButton}
+            onPress={() => setPhoto(null)}
+          >
+            <Text style={styles.removeImageText}>✕ הסר תמונה</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* --- Payment Amount Input --- */}
+      <Text style={styles.label}>מחיר</Text>
+      <View style={styles.paymentContainer}>
+        <Text style={styles.currencySymbol}>₪</Text>
+        <TextInput
+          value={paymentAmount}
+          onChangeText={handlePaymentChange}
+          style={styles.inputPayment}
+          placeholder="0"
+          placeholderTextColor="#999"
+          textAlign="right"
+          keyboardType="numeric"
+        />
+      </View>
+
       {/* --- Description Input --- */}
       <Text style={styles.label}>תיאור מפורט</Text>
       <TextInput
         value={description}
         onChangeText={setDescription}
         style={styles.inputMulti}
-        placeholder="פרט כאן מה בדיוק נדרש..."
+        placeholder="...פרט כאן מה בדיוק נדרש"
         placeholderTextColor="#999"
         multiline
         textAlign="right"
@@ -179,6 +284,36 @@ const styles = StyleSheet.create({
     fontSize: 16 
   },
 
+  paymentContainer: {
+    position: "relative",
+    height: 150,
+  },
+  inputPayment: {
+    height: 150,
+    backgroundColor: "white",
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingLeft: 60,
+    paddingVertical: 20,
+    textAlign: "right",
+    borderWidth: 2,
+    borderColor: "#588157",
+    fontSize: 56,
+    fontWeight: "700",
+  },
+  currencySymbol: {
+    position: "absolute",
+    left: 20,
+    top: 0,
+    bottom: 0,
+    fontSize: 40,
+    fontWeight: "700",
+    color: "#588157",
+    textAlignVertical: "center",
+    zIndex: 1,
+    lineHeight: 150,
+  },
+
   inputMulti: { 
     height: 120, 
     backgroundColor: "white", 
@@ -199,6 +334,44 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 5,
     fontWeight: 'bold'
+  },
+
+  photoButton: {
+    backgroundColor: "white",
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#588157",
+    borderStyle: "dashed",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  photoButtonText: {
+    color: "#588157",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  imagePreviewContainer: {
+    marginBottom: 15,
+    alignItems: "center",
+  },
+  imagePreview: {
+    width: "100%",
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 10,
+    backgroundColor: "#f0f0f0",
+  },
+  removeImageButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  removeImageText: {
+    color: "#d32f2f",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "right",
   },
 
   publishButton: { 
