@@ -1,15 +1,15 @@
-import * as Location from "expo-location";
+// import * as Location from "expo-location";
 
-export async function getUserLocation() {
-  let { status } = await Location.requestForegroundPermissionsAsync();
-  if (status !== "granted") {
-    alert("Permission to access location was denied");
-    return null;
-  }
+// export async function getUserLocation() {
+//   let { status } = await Location.requestForegroundPermissionsAsync();
+//   if (status !== "granted") {
+//     alert("Permission to access location was denied");
+//     return null;
+//   }
 
-  const location = await Location.getCurrentPositionAsync({});
-  return {
-    latitude: location.coords.latitude,
-    longitude: location.coords.longitude
-  };
-}
+//   const location = await Location.getCurrentPositionAsync({});
+//   return {
+//     latitude: location.coords.latitude,
+//     longitude: location.coords.longitude
+//   };
+// }

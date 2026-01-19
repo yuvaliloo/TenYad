@@ -1,5 +1,5 @@
-import { db, auth } from './firebase';
-import { collection, addDoc, serverTimestamp, GeoPoint } from 'firebase/firestore';
+import { addDoc, collection, GeoPoint, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from './firebase';
 
 // Define the shape of the data for TypeScript safety
 export type RequestData = {

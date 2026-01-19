@@ -1,8 +1,8 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { router } from "expo-router";
 import { addDoc, collection, GeoPoint, serverTimestamp } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage"; // Import Storage functions
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { auth, db } from './services/firebase';
+import { auth, db, storage } from './services/firebase'; // Import storage instance
 
 export default function NewRequestScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -125,6 +125,30 @@ export default function NewRequestScreen() {
     setLoading(true);
 
     try {
+      // 1. Upload Image (if exists)
+      let imageUrl = null;
+      if (photo) {
+        try {
+          // Fetch the local file as a blob
+          const response = await fetch(photo);
+          const blob = await response.blob();
+          
+          // Create a reference
+          const filename = `requests/${user.uid}/${Date.now()}.jpg`;
+          const storageRef = ref(storage, filename);
+          
+          // Upload
+          await uploadBytes(storageRef, blob);
+          
+          // Get URL
+          imageUrl = await getDownloadURL(storageRef);
+          
+        } catch (uploadError) {
+          console.error("Image upload failed:", uploadError);
+          Alert.alert("שים לב", "העלאת התמונה נכשלה. המשימה תפורסם ללא תמונה.");
+        }
+      }
+
       // 2. Prepare GeoPoint
       let locationData = null;
       if (location) {
@@ -145,7 +169,8 @@ export default function NewRequestScreen() {
         createdAt: serverTimestamp(),
         location: locationData,   // <--- From Auto GPS
         address: address,         // <--- From Input
-        paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null  // <--- Payment Amount
+        paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null,  // <--- Payment Amount
+        imageUrl: imageUrl        // <--- Save Image URL
       });
 
       console.log("✅ Success! Request created.");

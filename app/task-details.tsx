@@ -1,13 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { arrayUnion, doc, getDoc, updateDoc } from 'firebase/firestore';
-import {useState} from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from './services/firebase';
 
 export default function TaskDetails() {
     const [userName, setUserName] = useState("אורח");
   const params = useLocalSearchParams();
-  const { id, title, description, location, createdBy } = params;
+  const { id, title, description, location, createdBy, imageUrl, paymentAmount } = params;
 
   const handleTakeTask = async () => {
     try {
@@ -41,6 +41,7 @@ export default function TaskDetails() {
         interestedTaskers: arrayUnion({
           taskerId: user.uid,
           taskerName: user.displayName || user.email || 'לא ידוע',
+          profileImage: user.photoURL || null,
           timestamp: new Date().toISOString()
         })
       });
@@ -65,14 +66,27 @@ export default function TaskDetails() {
       </View>
 
       <ScrollView style={styles.content}>
-        {/* <View style={styles.section}>
-          <Text style={styles.label}>כותרת</Text>
-          <Text style={styles.value}>{title}</Text>
-        </View> */}
+        
+        {/* Task Image */}
+        {imageUrl ? (
+          <View style={styles.imageContainer}>
+             <Image source={{ uri: imageUrl as string }} style={styles.taskImage} />
+          </View>
+        ) : null}
 
+        <View style={styles.section}>
+          <Text style={styles.label}>כותרת</Text>
+          <Text style={styles.value}>{title || 'ללא כותרת'}</Text>
+        </View>
+      
         <View style={styles.section}>
           <Text style={styles.label}>תיאור</Text>
           <Text style={styles.value}>{description || 'אין תיאור'}</Text>
+        </View>
+
+        <View style={styles.section}>
+            <Text style={styles.label}>תשלום</Text>
+            <Text style={styles.value}>{paymentAmount ? `₪${paymentAmount}` : 'ללא תשלום'}</Text>
         </View>
 
         <View style={styles.section}>
@@ -177,5 +191,16 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+  },
+
+  imageContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  taskImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    resizeMode: 'cover',
   },
 });

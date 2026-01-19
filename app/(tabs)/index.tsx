@@ -10,6 +10,7 @@ import PaymentModal from '../../components/PaymentModal';
 import ReviewModal from '../../components/ReviewModal';
 import { auth, db } from "../services/firebase";
 import { getReviewsForUser, getReviewsWrittenByUser } from '../services/reviews';
+import { processFeedForTasker } from '../services/logicHelpers';
 
 export default function FrontPage() {
 
@@ -100,12 +101,16 @@ export default function FrontPage() {
         });
 
         if (taskerMode) {
-          // TASKER FILTER: Remove own requests, Filter only unassigned tasks, Sort by distance
-          items = items
-            .filter((item: any) => item.seekerId !== currentUserId)
-            .filter((item: any) => !item.worker || item.worker === "OPEN") // Handle both null and "OPEN" string
-            .sort((a, b) => a.distance - b.distance);
-        } 
+          // TASKER FILTER: Use shared logic + Sort by distance
+          items = processFeedForTasker(items, currentUserId)
+            .sort((a: any, b: any) => a.distance - b.distance);
+
+            //new- change(19.01.26)
+            // items = items
+            // .filter((item: any) => item.seekerId !== currentUserId)
+            // .filter((item: any) => !item.worker || item.worker === "OPEN") // Handle both null and "OPEN" string
+            // .sort((a, b) => a.distance - b.distance);
+        }   
         
         setRequests(items);
         setLoading(false);
@@ -228,6 +233,11 @@ export default function FrontPage() {
   const myOpenRequests = requests.filter((r) => !r.worker || r.worker === "OPEN");
   const myClosedRequests = requests.filter((r) => r.worker && r.worker !== "OPEN");
 
+  // Calculate Average Rating
+  const computedRating = taskerReviews.length > 0 
+    ? (taskerReviews.reduce((acc, r) => acc + (r.rating || 0), 0) / taskerReviews.length).toFixed(1) 
+    : null;
+
   return (
     <View style={styles.container}>
 
@@ -268,9 +278,11 @@ export default function FrontPage() {
                           id: r.id,
                           title: r.title,
                           description: r.description || '',
-                          location: r.location || '',
-                          createdBy: r.createdBy || '',
-                          distance: r.distance // Pass distance to details
+                          location: r.address || '',
+                          createdBy: r.seekerName || 'לא ידוע',
+                          distance: r.distance, // Pass distance to details
+                          imageUrl: r.imageUrl || '',
+                          paymentAmount: r.paymentAmount || ''
                         }
                       })}
                     >
@@ -447,7 +459,9 @@ export default function FrontPage() {
 
                 <View style={styles.modalSection}>
                   <Text style={styles.modalRatingText}>
-                    {selectedTasker.rating ? `⭐ ${selectedTasker.rating}/5` : 'טרם דורג'}
+                    {selectedTasker.rating 
+                        ? `⭐ ${selectedTasker.rating}/5` 
+                        : (computedRating ? `⭐ ${computedRating}/5` : 'טרם דורג')}
                   </Text>
                 </View>
 
