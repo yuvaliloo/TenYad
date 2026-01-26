@@ -116,6 +116,7 @@ export default function SignupScreen() {
             <View style={styles.inputGroup}>
               <ThemedText type="defaultSemiBold">Full Name</ThemedText>
               <TextInput 
+                testID="name_input"
                 style={styles.input} 
                 placeholder="John Doe" 
                 placeholderTextColor="#999"
@@ -128,6 +129,7 @@ export default function SignupScreen() {
             <View style={styles.inputGroup}>
               <ThemedText type="defaultSemiBold">Email</ThemedText>
               <TextInput 
+                testID="email_input"
                 style={[styles.input, errors.email ? styles.inputError : null]} 
                 placeholder="john@example.com" 
                 placeholderTextColor="#999"
@@ -146,6 +148,7 @@ export default function SignupScreen() {
             <View style={styles.inputGroup}>
               <ThemedText type="defaultSemiBold">Password</ThemedText>
               <TextInput 
+                testID="password_input"
                 style={[styles.input, errors.password ? styles.inputError : null]} 
                 placeholder="******" 
                 placeholderTextColor="#999"
@@ -163,6 +166,7 @@ export default function SignupScreen() {
             <View style={styles.inputGroup}>
               <ThemedText type="defaultSemiBold">Confirm Password</ThemedText>
               <TextInput 
+                testID="confirm_input"
                 style={[styles.input, errors.confirmPassword ? styles.inputError : null]} 
                 placeholder="******" 
                 placeholderTextColor="#999"
