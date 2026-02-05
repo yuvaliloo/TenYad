@@ -3,11 +3,11 @@ import { arrayUnion, doc, getDoc, updateDoc } from 'firebase/firestore';
 import {useState} from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from './services/firebase';
+import { RequestObject } from './services/requests';
 
 export default function TaskDetails() {
-    const [userName, setUserName] = useState("אורח");
   const params = useLocalSearchParams();
-  const { id, title, description, location, createdBy } = params;
+  const request: RequestObject = JSON.parse(params.request as string);
 
   const handleTakeTask = async () => {
     try {
@@ -18,7 +18,7 @@ export default function TaskDetails() {
       }
 
       // שלוף את המשימה כדי לבדוק אם המשתמש כבר הגיש בקשה
-      const requestRef = doc(db, 'requests', id as string);
+      const requestRef = doc(db, 'requests', request.requestId);
       const requestSnap = await getDoc(requestRef);
       
       if (requestSnap.exists()) {
@@ -65,24 +65,20 @@ export default function TaskDetails() {
       </View>
 
       <ScrollView style={styles.content}>
-        {/* <View style={styles.section}>
-          <Text style={styles.label}>כותרת</Text>
-          <Text style={styles.value}>{title}</Text>
-        </View> */}
 
         <View style={styles.section}>
           <Text style={styles.label}>תיאור</Text>
-          <Text style={styles.value}>{description || 'אין תיאור'}</Text>
+          <Text style={styles.value}>{request.description || 'אין תיאור'}</Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.label}>מיקום</Text>
-          <Text style={styles.value}>{location || 'לא צוין'}</Text>
+          <Text style={styles.value}>{request.address || 'לא צוין'}</Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.label}>פורסם על ידי</Text>
-          <Text style={styles.value}>{createdBy || 'לא ידוע'}</Text>
+          <Text style={styles.value}>{request.seekerId || 'לא ידוע'}</Text>
         </View>
       </ScrollView>
 

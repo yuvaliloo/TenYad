@@ -1,13 +1,13 @@
-import * as Location from 'expo-location';
-import { router } from "expo-router";
-import { onAuthStateChanged } from "firebase/auth";
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc, where } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, Modal, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import { TaskerMainPage } from '../tasker-main-page';
+
 
 // Imports from your specific project structure
 import PaymentModal from '../../components/PaymentModal';
 import ReviewModal from '../../components/ReviewModal';
+import { SeekerMainPage } from '../seeker-main-page';
 import { auth, db } from "../services/firebase";
 import { getReviewsForUser, getReviewsWrittenByUser } from '../services/reviews';
 
@@ -16,7 +16,7 @@ export default function FrontPage() {
   // --- STATE ---
   const [taskerMode, setTaskerMode] = useState(false);
   const [requests, setRequests] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+
   const [userName, setUserName] = useState("אורח");
   
   // Location State (From Friend's Logic)
@@ -25,101 +25,17 @@ export default function FrontPage() {
   // Seeker Logic State (From Your Logic)
   const [hiddenRequests, setHiddenRequests] = useState<Set<string>>(new Set());
   const [selectedTasker, setSelectedTasker] = useState<any>(null);
-  const [showTaskerModal, setShowTaskerModal] = useState(false);
+  const [showTaskerModal, setShowTaskerModal] = useState(true);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<'open' | 'closed'>('open');
 
   // Review System State (From Your Logic)
-  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [reviewTask, setReviewTask] = useState<any>(null);
   const [taskerReviews, setTaskerReviews] = useState<any[]>([]);
   const [reviewedTaskIds, setReviewedTaskIds] = useState<Set<string>>(new Set());
-
   // --- EFFECTS ---
-
-  // 1. Auth, Location & Main Data Fetching (Merged Logic)
-  useEffect(() => {
-    let firestoreUnsub: (() => void) | undefined;
-
-    const authUnsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      if (user.displayName) setUserName(user.displayName);
-      setLoading(true);
-
-      // Get Location (Friend's Logic)
-      let myCoords = null;
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({});
-          myCoords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-          setMyLocation(myCoords);
-        }
-      } catch (err) {
-        console.log("Location skipped:", err);
-      }
-
-      // Define Query based on Mode
-      let q;
-      if (taskerMode) {
-        // TASKER MODE: Get all open jobs (Friend's query logic + Your status logic)
-        // We look for status 'open' OR worker 'OPEN' (handling both data versions)
-        q = query(
-          collection(db, "requests"), 
-          where("status", "==", "open"), // Ensure we only see open requests
-          orderBy("createdAt", "desc")
-        );
-      } else {
-        // SEEKER MODE: Get ONLY my jobs (Your logic)
-        q = query(
-          collection(db, "requests"), 
-          where("seekerId", "==", user.uid),
-          orderBy("createdAt", "desc")
-        );
-      }
-
-      firestoreUnsub = onSnapshot(q, (snap) => {
-        const currentUserId = user.uid;
-
-        let items = snap.docs.map((d) => {
-          const data = d.data();
-          // Calculate Distance (Friend's Logic)
-          let dist = Infinity;
-          if (data.location && data.location.latitude && myCoords) {
-             dist = getDistanceFromLatLonInKm(
-               myCoords.lat, myCoords.lng,
-               data.location.latitude, data.location.longitude
-             );
-          }
-          return { id: d.id, ...data, distance: dist };
-        });
-
-        if (taskerMode) {
-          // TASKER FILTER: Remove own requests, Filter only unassigned tasks, Sort by distance
-          items = items
-            .filter((item: any) => item.seekerId !== currentUserId)
-            .filter((item: any) => !item.worker || item.worker === "OPEN") // Handle both null and "OPEN" string
-            .sort((a, b) => a.distance - b.distance);
-        } 
-        
-        setRequests(items);
-        setLoading(false);
-      }, (err) => {
-        console.warn("Firestore Error:", err);
-        setLoading(false);
-      });
-    });
-
-    return () => {
-      authUnsub();
-      if (firestoreUnsub) firestoreUnsub();
-    };
-  }, [taskerMode]);
 
   // 2. Fetch My Written Reviews (Your Logic)
   useEffect(() => {
@@ -152,25 +68,6 @@ export default function FrontPage() {
 
   // --- HELPER FUNCTIONS ---
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour >= 4 && hour < 12) return `בוקר טוב, ${userName}`;
-    if (hour >= 12 && hour < 18) return `צהריים טובים, ${userName}`;
-    if (hour >= 18 && hour < 22) return `ערב טוב, ${userName}`;
-    return `לילה טוב, ${userName}`;
-  };
-
-  const openReviewModal = (task: any) => {
-    setReviewTask(task);
-    setShowReviewModal(true);
-  };
-
-  const openTaskerDetails = (tasker: any, requestId: string) => {
-    setSelectedTasker(tasker);
-    setSelectedRequestId(requestId);
-    setShowTaskerModal(true);
-  };
-
   const closeTaskerModal = () => {
     setShowTaskerModal(false);
     setSelectedTasker(null);
@@ -192,216 +89,14 @@ export default function FrontPage() {
     }
   };
 
-  const handleDeleteRequest = async (requestId: string) => {
-    Alert.alert(
-      "מחיקת משימה",
-      "האם אתה בטוח שברצונך למחוק את המשימה?",
-      [
-        { text: "ביטול", style: "cancel" },
-        {
-          text: "מחק",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, "requests", requestId));
-              // The onSnapshot listener will automatically update the list
-            } catch (err) {
-              Alert.alert("שגיאה", "לא ניתן למחוק את המשימה");
-              console.error("Error deleting request:", err);
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const toggleRequestVisibility = (requestId: string) => {
-    setHiddenRequests(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(requestId)) newSet.delete(requestId);
-      else newSet.add(requestId);
-      return newSet;
-    });
-  };
-
-  // Seeker Filters
-  const myOpenRequests = requests.filter((r) => !r.worker || r.worker === "OPEN");
-  const myClosedRequests = requests.filter((r) => r.worker && r.worker !== "OPEN");
-
   return (
     <View style={styles.container}>
-
       {/* --- TASKER MODE UI --- */}
       {taskerMode ? (
-        <>
-          <Text style={styles.taskerHeader}>ברוך הבא למצב נותן יד</Text>
-          <Text style={styles.taskerSubtitle}>בחר משימה והתחל להרוויח</Text>
-
-          {loading ? (
-             <ActivityIndicator size="large" color="#588157" style={{marginTop: 20}} />
-          ) : (
-            <ScrollView style={styles.taskerRequestsList}>
-              {requests.length > 0 ? (
-                requests.map((r) => (
-                  <View key={r.id} style={styles.taskerRequestCard}>
-                    
-                    {/* Header: Distance Badge + Title */}
-                    <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5}}>
-                        <Text style={styles.distanceBadge}>
-                          {r.distance !== Infinity ? `📍 ${r.distance.toFixed(1)} ק"מ` : "📍 ? ק\"מ"}
-                        </Text>
-                        <Text style={styles.taskerRequestTitle}>{r.title}</Text>
-                    </View>
-
-                    {/* Description */}
-                    {/* {r.description && (
-                      <Text style={styles.taskerRequestDescription} numberOfLines={2}>
-                        {r.description}
-                      </Text>
-                    )} */}
-
-                    <TouchableOpacity 
-                      style={styles.taskerTakeButton}
-                      onPress={() => router.push({
-                        pathname: '/task-details',
-                        params: {
-                          id: r.id,
-                          title: r.title,
-                          description: r.description || '',
-                          location: r.location || '',
-                          createdBy: r.createdBy || '',
-                          distance: r.distance // Pass distance to details
-                        }
-                      })}
-                    >
-                      <Text style={styles.taskerTakeButtonText}>הצג משימה</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.taskerEmptyText}>אין משימות זמינות באזורך</Text>
-              )}
-            </ScrollView>
-          )}
-        </>
+        <TaskerMainPage></TaskerMainPage>
       ) : (
         /* --- SEEKER MODE UI --- */
-        <>
-          <Text style={styles.greeting}>{getGreeting()}</Text>
-
-          <View style={styles.buttonsContainer}>
-            <TouchableOpacity 
-              style={styles.buttonPrimary}
-              onPress={() => router.push("/new-request")}
-            >
-              <Text style={styles.plusIcon}>+</Text>
-              <Text style={styles.buttonPrimaryText}>צור משימה חדשה</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Tabs (Open / Closed) */}
-          <View style={styles.segmentedContainer}>
-            <View style={styles.segment}>
-              <TouchableOpacity
-                style={[styles.segmentButton, selectedTab === 'open' && styles.segmentButtonActive]}
-                onPress={() => setSelectedTab('open')}
-              >
-                <Text style={[styles.segmentText, selectedTab === 'open' && styles.segmentTextActive]}>פתוחות</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.segmentButton, selectedTab === 'closed' && styles.segmentButtonActive]}
-                onPress={() => setSelectedTab('closed')}
-              >
-                <Text style={[styles.segmentText, selectedTab === 'closed' && styles.segmentTextActive]}>סגורות</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Lists Container */}
-          <ScrollView style={styles.listsContainer}>
-            {selectedTab === 'open' ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>משימות פתוחות</Text>
-                {myOpenRequests.length > 0 ? (
-                  myOpenRequests.map((r) => (
-                    <View key={r.id} style={styles.requestItem}>
-                      <View style={styles.requestHeader}>
-                        <TouchableOpacity 
-                          style={styles.closeButton}
-                          onPress={() => toggleRequestVisibility(r.id)}
-                        >
-                          <Text style={styles.closeButtonText}>
-                            {hiddenRequests.has(r.id) ? 'הצג בקשות' : 'הסתר בקשות'}
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={[styles.editButton, { backgroundColor: '#c0392b' }]}
-                          onPress={() => handleDeleteRequest(r.id)}
-                        >
-                          <Text style={styles.editButtonText}>הסר</Text>
-                        </TouchableOpacity>                        <Text style={styles.requestTitle}>{r.title}</Text>
-                      </View>
-                      
-                      {/* Interested Taskers List */}
-                      {!hiddenRequests.has(r.id) && r.interestedTaskers && r.interestedTaskers.length > 0 && (
-                        <View style={styles.interestedTaskersContainer}>
-                          <Text style={styles.interestedTaskersTitle}>מעוניינים:</Text>
-                          {r.interestedTaskers.map((tasker: any, index: number) => (
-                            <View key={index} style={styles.interestedTaskerRow}>
-                              <TouchableOpacity 
-                                style={styles.showTaskerButton}
-                                onPress={() => openTaskerDetails(tasker, r.id)}
-                              >
-                                <Text style={styles.showTaskerButtonText}>הצג</Text>
-                              </TouchableOpacity>
-                              <Text style={styles.interestedTaskerName}>
-                                {tasker.taskerName}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.emptyText}>אין בקשות פתוחות</Text>
-                )}
-              </View>
-            ) : (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>משימות סגורות</Text>
-                {myClosedRequests.length > 0 ? (
-                  myClosedRequests.map((r) => (
-                    <View key={r.id} style={[styles.requestItem, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-                      <View>
-                        {r.workerId ? (
-                            reviewedTaskIds.has(r.id) ? (
-                                <Text style={{color: '#588157', fontSize: 14, fontWeight: '600'}}>
-                                    ✓ ביקורת נשלחה
-                                </Text>
-                            ) : (
-                                <TouchableOpacity 
-                                  style={styles.reviewButton} 
-                                  onPress={() => openReviewModal(r)}
-                                >
-                                  <Text style={styles.reviewButtonText}>סמן כבוצע</Text>
-                                </TouchableOpacity>
-                            )
-                        ) : null}
-                      </View>
-                      <View style={{flex: 1, alignItems: 'flex-end', marginLeft: 12}}>
-                        <Text style={styles.requestTitle}>{r.title}</Text>
-                        <Text style={{fontSize: 12, color: "#666", marginTop: 4}}>עובד: {r.worker}</Text>
-                      </View>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.emptyText}>אין משימות סגורות</Text>
-                )}
-              </View>
-            )}
-          </ScrollView>
-        </>
+        <SeekerMainPage />
       )}
 
       {/* Helper Switch */}
@@ -417,79 +112,8 @@ export default function FrontPage() {
         </Text>
       </View>
 
-      {/* Tasker Details Modal (With Accept Logic) */}
-      <Modal
-        visible={showTaskerModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={closeTaskerModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={closeTaskerModal} style={styles.modalCloseButton}>
-                <Text style={styles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-              <Text style={styles.modalTitle}>פרטי מועמד</Text>
-            </View>
 
-            {selectedTasker && (
-              <View style={styles.modalBody}>
-                <View style={styles.profileImageContainer}>
-                  <Image
-                    source={selectedTasker.profileImage ? { uri: selectedTasker.profileImage } : require('../../assets/images/react-logo.png')}
-                    style={styles.profileImage}
-                  />
-                </View>
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalNameText}>{selectedTasker.taskerName}</Text>
-                </View>
-
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalRatingText}>
-                    {selectedTasker.rating ? `⭐ ${selectedTasker.rating}/5` : 'טרם דורג'}
-                  </Text>
-                </View>
-
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalLabel}>טלפון</Text>
-                  <Text style={styles.modalInfoText}>
-                    {selectedTasker.phone || 'לא קיים טלפון'}
-                  </Text>
-                </View>
-
-                {/* Reviews List */}
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalLabel}>חוות דעת ({taskerReviews.length})</Text>
-                  {taskerReviews.length > 0 ? (
-                    taskerReviews.map((review, index) => (
-                      <View key={index} style={{marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 5}}>
-                         <Text style={{fontWeight: 'bold', textAlign: 'right'}}>{review.rating} ⭐</Text>
-                         {review.comment ? <Text style={{textAlign: 'right'}}>{review.comment}</Text> : null}
-                         {review.createdAt ? <Text style={{textAlign: 'right', fontSize: 10, color: '#888'}}>
-                           {new Date(review.createdAt.toDate ? review.createdAt.toDate() : review.createdAt).toLocaleDateString('he-IL')}
-                         </Text> : null}
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.modalInfoText}>
-                      {selectedTasker.review || 'טרם ניתנה חוות דעת'}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            )}
-
-            <TouchableOpacity style={styles.modalAcceptButton} onPress={acceptSelectedTasker}>
-              <Text style={styles.modalAcceptButtonText}>קבל מועמד</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.modalCloseAction} onPress={closeTaskerModal}>
-              <Text style={styles.modalCloseActionText}>סגור</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      
 
       {/* Review Modal */}
       {reviewTask && (
@@ -508,33 +132,18 @@ export default function FrontPage() {
       )}
 
       {/* Payment Modal */}
-      {reviewTask && (
+      {/*reviewTask && (
         <PaymentModal
           visible={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
           taskerName={reviewTask.worker}
         />
-      )}
+      )*/}
 
     </View>
   );
 }
 
-// --- MATH HELPERS (From Friend) ---
-function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  var R = 6371; 
-  var dLat = deg2rad(lat2 - lat1);
-  var dLon = deg2rad(lon2 - lon1);
-  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat1)) *
-          Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; 
-}
-
-function deg2rad(deg: number) {
-  return deg * (Math.PI / 180);
-}
 
 const styles = StyleSheet.create({
   container: {
@@ -542,171 +151,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAF8EF",
     paddingTop: 60,
     paddingHorizontal: 20,
-  },
-
-  topRow: {
-    flexDirection: "column",
-    alignItems: "flex-end",
-    gap: 4,
-  },
-
-  topText: {
-    fontSize: 16,
-    color: "#588157",
-    fontWeight: "600",
-  },
-
-  greeting: {
-    marginTop: 70,
-    fontSize: 24,
-    textAlign: "right",
-    marginRight: 12,
-    fontWeight: "600",
-    color: "#6f411d",
-  },
-
-  buttonsContainer: {
-    marginTop: 30, // Adjusted spacing
-    alignItems: "center",
-  },
-
-  buttonPrimary: {
-    backgroundColor: "#588157",
-    width: 150,
-    height: 150,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  plusIcon: {
-    color: "white",
-    fontSize: 48,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-
-  buttonPrimaryText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-
-  segmentedContainer: {
-    marginTop: 30,
-    alignItems: 'center',
-    width: '100%'
-  },
-
-  segment: {
-    flexDirection: 'row',
-    backgroundColor: '#eee',
-    borderRadius: 999,
-    padding: 4,
-    width: 260,
-    justifyContent: 'space-between'
-  },
-
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-
-  segmentButtonActive: {
-    backgroundColor: '#588157'
-  },
-
-  segmentText: {
-    color: '#6f411d',
-    fontWeight: '600'
-  },
-
-  segmentTextActive: {
-    color: '#fff'
-  },
-
-  listsContainer: {
-    marginTop: 24,
-    width: "100%",
-  },
-
-  section: {
-    marginBottom: 20,
-  },
-
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#6f411d",
-    marginBottom: 8,
-    textAlign: "right",
-  },
-
-  requestItem: {
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#eee",
-  },
-
-  requestHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
-  },
-
-  editButton: {
-    backgroundColor: "#e74c3c",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-
-  editButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  closeButton: {
-    backgroundColor: "#6f411d",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-
-  closeButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  requestTitle: {
-    fontSize: 16,
-    color: "#333",
-    textAlign: "right",
-    flex: 1,
-    marginRight: 10,
-  },
-
-  requestMeta: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "#666",
-    textAlign: "right",
-  },
-
-  emptyText: {
-    color: "#c0392b",
-    fontWeight: "600",
-    textAlign: "right",
   },
 
   helperSwitchContainer: {
@@ -723,7 +167,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // Tasker Mode Styles
   taskerHeader: {
     fontSize: 26,
     fontWeight: "700",
@@ -738,116 +181,6 @@ const styles = StyleSheet.create({
     color: "#888",
     textAlign: "center",
     marginBottom: 24,
-  },
-
-  taskerRequestsList: {
-    flex: 1,
-    marginTop: 20,
-  },
-
-  taskerRequestCard: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-
-  taskerRequestTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-    textAlign: "right",
-    marginBottom: 8,
-    flex: 1, // Allow text to wrap
-  },
-
-  taskerRequestDescription: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "right",
-    marginBottom: 12,
-  },
-
-  taskerTakeButton: {
-    backgroundColor: "#588157",
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 8,
-  },
-
-  taskerTakeButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-
-  taskerEmptyText: {
-    fontSize: 16,
-    color: "#999",
-    textAlign: "center",
-    marginTop: 40,
-  },
-
-  // Distance Badge (Added from friend)
-  distanceBadge: { 
-    fontSize: 14, 
-    color: "#588157", 
-    fontWeight: "bold", 
-    backgroundColor: "#e9f5e9", 
-    paddingHorizontal: 8, 
-    paddingVertical: 4, 
-    borderRadius: 8, 
-    overflow: 'hidden' 
-  },
-
-  // Interested Taskers
-  interestedTaskersContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-  },
-
-  interestedTaskersTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#588157",
-    textAlign: "right",
-    marginBottom: 6,
-  },
-
-  interestedTaskerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
-
-  interestedTaskerName: {
-    fontSize: 14,
-    color: "#333",
-    textAlign: "right",
-    flex: 1,
-  },
-
-  showTaskerButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginLeft: 10,
-  },
-
-  showTaskerButtonText: {
-    color: "#588157",
-    fontSize: 14,
-    fontWeight: "600",
   },
 
   // Modal styles
@@ -869,7 +202,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-    maxHeight: '80%', // Limit height for scroll
+    maxHeight: '80%',
   },
 
   modalHeader: {
@@ -929,17 +262,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  modalValue: {
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'right',
-    backgroundColor: '#f9f9f9',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-
   modalNameText: {
     fontSize: 20,
     fontWeight: '700',
@@ -981,6 +303,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 2,
   },
+
   modalCloseActionText: {
     color: '#e74c3c',
     fontSize: 16,

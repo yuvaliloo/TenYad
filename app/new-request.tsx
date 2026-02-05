@@ -2,7 +2,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { router } from "expo-router";
-import { addDoc, collection, GeoPoint, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, GeoPoint, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,7 +15,21 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { auth, db } from './services/firebase';
+import { uploadBytes,getDownloadURL,ref } from 'firebase/storage';
+import { auth, db,storage} from './services/firebase';
+import { addRequestToFirestore, RequestObject } from './services/requests';
+
+async function uploadPhotoToStorage(localUri: string, userId: string): Promise<string> {
+  const filename = `requests/${userId}/${Date.now()}.jpg`;
+  const storageRef = ref(storage, filename);
+
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+
+  await uploadBytes(storageRef, blob);
+  const downloadUrl = await getDownloadURL(storageRef);
+  return downloadUrl;
+}
 
 export default function NewRequestScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -23,7 +37,7 @@ export default function NewRequestScreen() {
   const [title, setTitle] = useState("");     // <--- New Title State
   const [description, setDescription] = useState("");
   const [photo, setPhoto] = useState<string | null>(null); // <--- Photo State
-  const [paymentAmount, setPaymentAmount] = useState(""); // <--- Payment Amount State
+  const [paymentAmount, setPaymentAmount] = useState("0"); // <--- Payment Amount State
   const [loading, setLoading] = useState(false);
   const [locationStatus, setLocationStatus] = useState("מאתר מיקום...");
 
@@ -111,57 +125,61 @@ export default function NewRequestScreen() {
   };
 
   const publish = async () => {
-    if (!title || !description || !address) {
-      Alert.alert("חסרים פרטים", "אנא מלא כותרת, תיאור וכתובת");
-      return;
-    }
-    
     const user = auth.currentUser;
     if (!user) {
       Alert.alert("שגיאה", "עליך להתחבר כדי לפרסם בקשה");
       return;
     }
+    if (!title || !description || !address) {
+      Alert.alert("חסרים פרטים", "אנא מלא כותרת, תיאור וכתובת");
+      return;
+    }
 
-    setLoading(true);
-
-    try {
-      // 2. Prepare GeoPoint
-      let locationData = null;
-      if (location) {
-        locationData = new GeoPoint(location.coords.latitude, location.coords.longitude);
-      }
-
-      // 3. Write to Firestore
-      await addDoc(collection(db, 'requests'), {
-        title: title,             // <--- From Input
-        description: description,
-        
-        seekerId: user.uid,
-        seekerName: user.displayName || "Anonymous",
-        
-        status: "open",
-        worker: "OPEN", 
-        
-        createdAt: serverTimestamp(),
-        location: locationData,   // <--- From Auto GPS
-        address: address,         // <--- From Input
-        paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null  // <--- Payment Amount
+    const confirmPaymentAlert = (amount:string):Promise<Boolean> =>{
+      return new Promise((resolve) => {
+        Alert.alert(
+          "תשלום לבקשה",
+          `האם את בטוח שסכום המטלה הוא ${amount} שקלים?`,
+          [
+            { text: "ביטול", style: "cancel", onPress: () => resolve(false) },
+            { text: "אישור", style: "destructive", onPress: () => resolve(true) },
+          ]
+        );
       });
+    }
 
-      console.log("✅ Success! Request created.");
+    const isConfirmed = await confirmPaymentAlert(paymentAmount);
+    if(!isConfirmed) return;
+    
+    setLoading(true);
+    let photoStoragePath = ""
+    if(photo){
+      photoStoragePath = await uploadPhotoToStorage(photo,user.uid);
+    }
+    const newRequest:RequestObject ={
+        requestId: "", // Firestore will generate ID
+        seekerId: user.uid,
+        address: address,
+        location: new GeoPoint(location?.coords.latitude || 0, location?.coords.longitude || 0),
+        title: title,
+        description: description,
+        imageUrls: (photoStoragePath) ? [photoStoragePath] : undefined,
+        paymentAmount: paymentAmount ? parseFloat(paymentAmount) : 0,
+        createdAt: Timestamp.now(),
+        interestedTaskers:[],
+        status: "open",
+        workerId: null
+    };
+
+    const res = await addRequestToFirestore(newRequest);
+    if(res){
       Alert.alert("הצלחה", "הבקשה פורסמה בהצלחה!");
       router.back();
-
-    } catch (err) {
-      console.error("❌ Error writing document:", err);
-      if (err instanceof Error) {
-        Alert.alert("Error", err.message);
-      } else {
-        Alert.alert("Error", "Unknown error occurred");
-      }
-    } finally {
-      setLoading(false);
     }
+    else{
+      Alert.alert("שגיאה", "לא ניתן לפרסם את הבקשה כעת. נסה שוב מאוחר יותר.");
+    }
+    setLoading(false);
   };
 
   return (

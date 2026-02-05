@@ -32,13 +32,6 @@ export default function TabLayout() {
         }}
       />
 
-      <Tabs.Screen
-        name="tasker"
-        options={{
-          href: null,
-        }}
-      />
-
     </Tabs>
   );
 }
