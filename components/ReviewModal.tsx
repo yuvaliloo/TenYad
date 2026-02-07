@@ -26,11 +26,6 @@ export default function ReviewModal({ visible, onClose, onSuccess, reviewedUserI
         return;
     }
 
-    if (!comment.trim()) {
-        Alert.alert('שגיאה', 'אנא כתוב כמה מילים בביקורת');
-        return;
-    }
-
     setLoading(true);
 
     const result = await createReview({
@@ -47,14 +42,13 @@ export default function ReviewModal({ visible, onClose, onSuccess, reviewedUserI
     setLoading(false);
     
     if (result.success) {
-      Alert.alert('תודה!', 'הביקורת נשמרה בהצלחה');
       setComment('');
       setRating(5);
       if (onSuccess) {
-        onSuccess();
-      } else {
-        onClose();
+        await onSuccess();
       }
+      Alert.alert('תודה!', 'הביקורת נשמרה והמשימה סומנה כהושלמה');
+      onClose();
     } else {
       Alert.alert('שגיאה', `לא ניתן היה לשמור את הביקורת\nהודעת שגיאה: ${result.error}`);
     }
@@ -92,13 +86,7 @@ export default function ReviewModal({ visible, onClose, onSuccess, reviewedUserI
               />
 
               <View style={styles.buttons}>
-                <TouchableOpacity onPress={() => {
-                  if (onSuccess) {
-                    onSuccess();
-                  } else {
-                    onClose();
-                  }
-                }} style={styles.cancelButton} disabled={loading}>
+                <TouchableOpacity onPress={onClose} style={styles.cancelButton} disabled={loading}>
                   <Text style={styles.cancelButtonText}>אולי אחר כך</Text>
                 </TouchableOpacity>
                 

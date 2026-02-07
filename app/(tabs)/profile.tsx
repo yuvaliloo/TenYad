@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  TextInput, 
-  Alert, 
-  ActivityIndicator,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform
-} from 'react-native';
 import { useRouter } from "expo-router";
-import { signOut, updateProfile, onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut, updateProfile } from "firebase/auth";
 import { collection, onSnapshot, query, where } from "firebase/firestore"; // Added Firestore imports
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { auth, db } from "../services/firebase";
 
 export default function ProfileScreen() {
@@ -53,7 +53,10 @@ export default function ProfileScreen() {
     );
 
     const tasksUnsub = onSnapshot(tasksQuery, (snapshot) => {
-      setCompletedTasksCount(snapshot.size);
+      // Filter for completed status in memory to be safe and debuggable
+      const completedCount = snapshot.docs.filter(doc => doc.data().status === "completed").length;
+      console.log(`Found ${snapshot.size} tasks for worker ${user.uid}. ${completedCount} are completed.`);
+      setCompletedTasksCount(completedCount);
     }, (error) => console.error("Error tasks:", error));
 
     // B. Fetch Reviews (Where I am the reviewed user)

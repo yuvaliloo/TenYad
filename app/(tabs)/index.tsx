@@ -9,8 +9,8 @@ import { ActivityIndicator, Alert, Image, Modal, ScrollView, StyleSheet, Switch,
 import PaymentModal from '../../components/PaymentModal';
 import ReviewModal from '../../components/ReviewModal';
 import { auth, db } from "../services/firebase";
-import { getReviewsForUser, getReviewsWrittenByUser } from '../services/reviews';
 import { processFeedForTasker } from '../services/logicHelpers';
+import { getReviewsForUser, getReviewsWrittenByUser } from '../services/reviews';
 
 export default function FrontPage() {
 
@@ -165,8 +165,21 @@ export default function FrontPage() {
     return `לילה טוב, ${userName}`;
   };
 
-  const openReviewModal = (task: any) => {
+  const openReviewModal = async (task: any) => {
     setReviewTask(task);
+    
+    // Update task status to completed immediately when seeker clicks "Mark as Done"
+    if (task?.id) {
+      try {
+        const ref = doc(db, "requests", task.id);
+        await updateDoc(ref, { status: "completed" });
+        console.log(`Task ${task.id} status updated to 'completed' immediately.`);
+      } catch (err) {
+        console.error("Failed to update status to completed:", err);
+        Alert.alert("שגיאה", "לא ניתן היה לעדכן את סטטוס המשימה.");
+      }
+    }
+    
     setShowReviewModal(true);
   };
 
@@ -189,7 +202,7 @@ export default function FrontPage() {
       await updateDoc(requestRef, {
         worker: selectedTasker.taskerName || selectedTasker.name || "",
         workerId: selectedTasker.taskerId || selectedTasker.uid || null,
-        status: "closed"
+        status: "assigned" // Status is assigned, not completed yet
       });
       closeTaskerModal();
     } catch (err) {
@@ -476,7 +489,7 @@ export default function FrontPage() {
                 <View style={styles.modalSection}>
                   <Text style={styles.modalLabel}>חוות דעת ({taskerReviews.length})</Text>
                   {taskerReviews.length > 0 ? (
-                    taskerReviews.map((review, index) => (
+                    taskerReviews.slice(0, 3).map((review, index) => (
                       <View key={index} style={{marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 5}}>
                          <Text style={{fontWeight: 'bold', textAlign: 'right'}}>{review.rating} ⭐</Text>
                          {review.comment ? <Text style={{textAlign: 'right'}}>{review.comment}</Text> : null}
@@ -510,9 +523,9 @@ export default function FrontPage() {
         <ReviewModal
           visible={showReviewModal}
           onClose={() => setShowReviewModal(false)}
-          onSuccess={() => {
-            setShowReviewModal(false);
-            setShowPaymentModal(true);
+          onSuccess={async () => {
+             console.log("Review submitted successfully. Opening payment modal.");
+             setShowPaymentModal(true);
           }}
           reviewedUserId={reviewTask.workerId}
           reviewedUserName={reviewTask.worker}
