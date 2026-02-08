@@ -13,13 +13,20 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  KeyboardAvoidingView, 
+  Platform
 } from "react-native";
-import { auth, db } from './services/firebase'; // Note the '..' to go up one level
-import { uploadImage } from './services/storage'; // Note the '..' to go up one level
+import { auth, db } from './services/firebase';
+import { uploadImage } from './services/storage';
 
 export default function NewRequestScreen() {
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  // Device Location (GPS) - Used as fallback or for initial region
+  const [deviceLocation, setDeviceLocation] = useState<Location.LocationObject | null>(null);
+  
+  // 📍 SELECTED LOCATION (From Address) - This is what we want to save!
+  const [selectedCoords, setSelectedCoords] = useState<{lat: number, lng: number} | null>(null);
+
   const [address, setAddress] = useState(""); 
   const [title, setTitle] = useState("");     
   const [description, setDescription] = useState("");
@@ -28,7 +35,7 @@ export default function NewRequestScreen() {
   const [loading, setLoading] = useState(false);
   const [locationStatus, setLocationStatus] = useState("מאתר מיקום...");
 
-  // 1. Get Location Automatically on Mount
+  // 1. Get Device Location Automatically (Just for helper, not for saving)
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -38,8 +45,8 @@ export default function NewRequestScreen() {
       }
       try {
         let loc = await Location.getCurrentPositionAsync({});
-        setLocation(loc);
-        setLocationStatus("📍 מיקום נוכחי זוהה בהצלחה");
+        setDeviceLocation(loc);
+        setLocationStatus("📍 מיקום נוכחי זוהה (אופציונלי)");
       } catch (err) {
         setLocationStatus("שגיאה בזיהוי מיקום");
       }
@@ -62,37 +69,33 @@ export default function NewRequestScreen() {
       return;
     }
 
-    Alert.alert(
-      "בחר תמונה",
-      "מאיפה תרצה לבחור תמונה?",
-      [
-        {
-          text: "מצלמה",
-          onPress: async () => {
-            const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: false,
-              aspect: [4, 3],
-              quality: 0.5,
-            });
-            if (!result.canceled && result.assets[0]) setPhoto(result.assets[0].uri);
-          },
+    Alert.alert("בחר תמונה", "מאיפה תרצה לבחור תמונה?", [
+      {
+        text: "מצלמה",
+        onPress: async () => {
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: false,
+            aspect: [4, 3],
+            quality: 0.5,
+          });
+          if (!result.canceled && result.assets[0]) setPhoto(result.assets[0].uri);
         },
-        {
-          text: "גלריה",
-          onPress: async () => {
-            const result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaTypeOptions.Images,
-              allowsEditing: true,
-              aspect: [4, 3],
-              quality: 0.5,
-            });
-            if (!result.canceled && result.assets[0]) setPhoto(result.assets[0].uri);
-          },
+      },
+      {
+        text: "גלריה",
+        onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.5,
+          });
+          if (!result.canceled && result.assets[0]) setPhoto(result.assets[0].uri);
         },
-        { text: "ביטול", style: "cancel" },
-      ]
-    );
+      },
+      { text: "ביטול", style: "cancel" },
+    ]);
   };
 
   const publish = async () => {
@@ -110,24 +113,25 @@ export default function NewRequestScreen() {
     setLoading(true);
 
     try {
-      // 1. Create Ref manually so we have the ID for the folder name
       const newRequestRef = doc(collection(db, "requests"));
       const requestId = newRequestRef.id;
       
       let imageUrl = null;
-
-      // 2. Upload Image (Folder: task_pics, Name: requestId)
       if (photo) {
           imageUrl = await uploadImage(photo, "task_pics", requestId);
       }
 
-      // 3. Prepare GeoPoint
-      let locationData = null;
-      if (location) {
-        locationData = new GeoPoint(location.coords.latitude, location.coords.longitude);
+      // 📍 LOGIC FIX: Prioritize the Selected Address Coordinates
+      let finalGeoPoint = null;
+
+      if (selectedCoords) {
+        // Option A: User selected an address from Google
+        finalGeoPoint = new GeoPoint(selectedCoords.lat, selectedCoords.lng);
+      } else if (deviceLocation) {
+        // Option B: Fallback to GPS if they typed manually but have GPS on (less accurate for address)
+        finalGeoPoint = new GeoPoint(deviceLocation.coords.latitude, deviceLocation.coords.longitude);
       }
 
-      // 4. Save Data
       await setDoc(newRequestRef, {
         title: title,            
         description: description,
@@ -136,25 +140,29 @@ export default function NewRequestScreen() {
         status: "open",
         worker: "OPEN", 
         createdAt: serverTimestamp(),
-        location: locationData,   
+        location: finalGeoPoint, // 👈 Saving the correct location now!
         address: address,         
         paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null,
         image: imageUrl 
       });
 
-      console.log("✅ Success! Request created:", requestId);
+      console.log("✅ Request created:", requestId);
       Alert.alert("הצלחה", "הבקשה פורסמה בהצלחה!");
       router.back();
 
     } catch (err) {
-      console.error("❌ Error writing document:", err);
-      Alert.alert("Error", "Save failed");
+      console.error("❌ Error creating request:", err);
+      Alert.alert("Error", "Unknown error occurred");
     } finally {
       setLoading(false);
     }
   };
 
   return (
+    <KeyboardAvoidingView 
+      style={{flex:1}} 
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
     <ScrollView 
       style={styles.container} 
       contentContainerStyle={{paddingBottom: 40}}
@@ -171,23 +179,39 @@ export default function NewRequestScreen() {
         textAlign="right"
       />
 
+      {/* --- GOOGLE AUTOCOMPLETE SECTION --- */}
       <Text style={styles.label}>מיקום המשימה</Text>
+      
       <View style={styles.autocompleteWrapper}>
         <GooglePlacesAutocomplete
           placeholder='חפש כתובת, עיר או עסק...'
+          
+          // 1. THIS IS CRITICAL: Fetch Geometry (Lat/Lng)
+          fetchDetails={true} 
+
           onPress={(data: GooglePlaceData, details: GooglePlaceDetail | null = null) => {
             setAddress(data.description);
+            
+            // 2. Capture the Lat/Lng from the details
+            if (details?.geometry?.location) {
+              const { lat, lng } = details.geometry.location;
+              setSelectedCoords({ lat, lng });
+              console.log("📍 Address Selected:", lat, lng);
+            }
           }}
+
           query={{
             key: process.env.EXPO_PUBLIC_GOOGLE_API_KEY, 
             language: 'he', 
             components: 'country:il', 
           }}
           enablePoweredByContainer={false}
+          
           textInputProps={{
             onChangeText: (text) => setAddress(text),
             value: address,
           }}
+          
           styles={{
             container: { flex: 0, width: '100%' },
             textInput: {
@@ -204,7 +228,7 @@ export default function NewRequestScreen() {
             listView: {
               position: 'absolute', 
               top: 55, 
-              zIndex: 1000, 
+              zIndex: 1000,   
               elevation: 1000, 
               backgroundColor: 'white',
               borderRadius: 5,
@@ -289,6 +313,7 @@ export default function NewRequestScreen() {
       </TouchableOpacity>
 
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -296,7 +321,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#FAF8EF" },
   label: { fontSize: 18, marginBottom: 8, marginTop: 10, color: "#6f411d", fontWeight: "600", textAlign: "right" },
   inputSingle: { height: 50, backgroundColor: "white", borderRadius: 12, paddingHorizontal: 15, textAlign: "right", borderWidth: 1, borderColor: "#ddd", fontSize: 16 },
-  autocompleteWrapper: { marginBottom: 15, zIndex: 10, elevation: 10 },
+  autocompleteWrapper: { marginBottom: 15, zIndex: 100, elevation: 10 },
   paymentContainer: { position: "relative", height: 150, zIndex: 1, elevation: 1 },
   inputPayment: { height: 150, backgroundColor: "white", borderRadius: 16, paddingHorizontal: 20, paddingLeft: 60, paddingVertical: 20, textAlign: "right", borderWidth: 2, borderColor: "#588157", fontSize: 56, fontWeight: "700" },
   currencySymbol: { position: "absolute", left: 20, top: 0, bottom: 0, fontSize: 40, fontWeight: "700", color: "#588157", textAlignVertical: "center", zIndex: 1, lineHeight: 150 },
