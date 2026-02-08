@@ -1,13 +1,13 @@
-import { Platform } from "react-native";
-import { initializeApp,getApp,getApps } from "firebase/app";
-import { 
-  initializeAuth, 
-  getReactNativePersistence, 
-  browserLocalPersistence 
-} from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApp, getApps, initializeApp } from "firebase/app";
+import {
+  browserLocalPersistence,
+  initializeAuth,
+  getReactNativePersistence
+} from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { Platform } from "react-native";
 
 // ... Your Config Object ...
 const firebaseConfig = {
@@ -21,7 +21,7 @@ const firebaseConfig = {
 
 
 
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // 1. Determine which storage to use based on Platform
 let authPersistence;
@@ -31,7 +31,12 @@ if (Platform.OS === 'web') {
   authPersistence = browserLocalPersistence;
 } else {
   // Use AsyncStorage for iOS/Android
-  authPersistence = getReactNativePersistence(AsyncStorage);
+  try {
+    authPersistence = getReactNativePersistence(AsyncStorage);
+  } catch (error) {
+    console.warn("getReactNativePersistence not available, using browserLocalPersistence");
+    authPersistence = browserLocalPersistence;
+  }
 }
 
 // 2. Initialize Auth with the correct persistence
@@ -47,3 +52,8 @@ export const db = initializeFirestore(app, {
 });
 
 export const storage = getStorage(app);
+
+// Debug: Log storage configuration
+console.log("🔥 Firebase Storage Config:");
+console.log("  Bucket:", storage.app.options.storageBucket);
+console.log("  Project ID:", storage.app.options.projectId);

@@ -1,8 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { router } from "expo-router";
-import { addDoc, collection, GeoPoint, serverTimestamp } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage"; // Import Storage functions
+import { collection, doc, GeoPoint, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,15 +14,17 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { auth, db, storage } from './services/firebase'; // Import storage instance
+import { GooglePlaceData, GooglePlaceDetail, GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { auth, db } from './services/firebase'; // Note the '..' to go up one level
+import { uploadImage } from './services/storage'; // Note the '..' to go up one level
 
 export default function NewRequestScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [address, setAddress] = useState(""); // <--- New Address State
-  const [title, setTitle] = useState("");     // <--- New Title State
+  const [address, setAddress] = useState(""); 
+  const [title, setTitle] = useState("");     
   const [description, setDescription] = useState("");
-  const [photo, setPhoto] = useState<string | null>(null); // <--- Photo State
-  const [paymentAmount, setPaymentAmount] = useState(""); // <--- Payment Amount State
+  const [photo, setPhoto] = useState<string | null>(null); 
+  const [paymentAmount, setPaymentAmount] = useState(""); 
   const [loading, setLoading] = useState(false);
   const [locationStatus, setLocationStatus] = useState("מאתר מיקום...");
 
@@ -35,7 +36,6 @@ export default function NewRequestScreen() {
         setLocationStatus("אין אישור מיקום");
         return;
       }
-
       try {
         let loc = await Location.getCurrentPositionAsync({});
         setLocation(loc);
@@ -46,11 +46,8 @@ export default function NewRequestScreen() {
     })();
   }, []);
 
-  // Handle Payment Amount - Only Numbers
   const handlePaymentChange = (text: string) => {
-    // Remove any non-numeric characters except decimal point
     const numericValue = text.replace(/[^0-9.]/g, '');
-    // Ensure only one decimal point
     const parts = numericValue.split('.');
     const filteredValue = parts.length > 2 
       ? parts[0] + '.' + parts.slice(1).join('')
@@ -58,16 +55,13 @@ export default function NewRequestScreen() {
     setPaymentAmount(filteredValue);
   };
 
-  // Handle Camera/Photo Selection
   const pickImage = async () => {
-    // Request camera permissions
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert("אין הרשאה", "אנא אפשר גישה למצלמה בהגדרות");
       return;
     }
 
-    // Show action sheet to choose camera or gallery
     Alert.alert(
       "בחר תמונה",
       "מאיפה תרצה לבחור תמונה?",
@@ -79,12 +73,9 @@ export default function NewRequestScreen() {
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: false,
               aspect: [4, 3],
-              quality: 0.8,
+              quality: 0.5,
             });
-
-            if (!result.canceled && result.assets[0]) {
-              setPhoto(result.assets[0].uri);
-            }
+            if (!result.canceled && result.assets[0]) setPhoto(result.assets[0].uri);
           },
         },
         {
@@ -94,18 +85,12 @@ export default function NewRequestScreen() {
               mediaTypes: ImagePicker.MediaTypeOptions.Images,
               allowsEditing: true,
               aspect: [4, 3],
-              quality: 0.8,
+              quality: 0.5,
             });
-
-            if (!result.canceled && result.assets[0]) {
-              setPhoto(result.assets[0].uri);
-            }
+            if (!result.canceled && result.assets[0]) setPhoto(result.assets[0].uri);
           },
         },
-        {
-          text: "ביטול",
-          style: "cancel",
-        },
+        { text: "ביטול", style: "cancel" },
       ]
     );
   };
@@ -125,74 +110,57 @@ export default function NewRequestScreen() {
     setLoading(true);
 
     try {
-      // 1. Upload Image (if exists)
+      // 1. Create Ref manually so we have the ID for the folder name
+      const newRequestRef = doc(collection(db, "requests"));
+      const requestId = newRequestRef.id;
+      
       let imageUrl = null;
+
+      // 2. Upload Image (Folder: task_pics, Name: requestId)
       if (photo) {
-        try {
-          // Fetch the local file as a blob
-          const response = await fetch(photo);
-          const blob = await response.blob();
-          
-          // Create a reference
-          const filename = `requests/${user.uid}/${Date.now()}.jpg`;
-          const storageRef = ref(storage, filename);
-          
-          // Upload
-          await uploadBytes(storageRef, blob);
-          
-          // Get URL
-          imageUrl = await getDownloadURL(storageRef);
-          
-        } catch (uploadError) {
-          console.error("Image upload failed:", uploadError);
-          Alert.alert("שים לב", "העלאת התמונה נכשלה. המשימה תפורסם ללא תמונה.");
-        }
+          imageUrl = await uploadImage(photo, "task_pics", requestId);
       }
 
-      // 2. Prepare GeoPoint
+      // 3. Prepare GeoPoint
       let locationData = null;
       if (location) {
         locationData = new GeoPoint(location.coords.latitude, location.coords.longitude);
       }
 
-      // 3. Write to Firestore
-      await addDoc(collection(db, 'requests'), {
-        title: title,             // <--- From Input
+      // 4. Save Data
+      await setDoc(newRequestRef, {
+        title: title,            
         description: description,
-        
         seekerId: user.uid,
         seekerName: user.displayName || "Anonymous",
-        
         status: "open",
         worker: "OPEN", 
-        
         createdAt: serverTimestamp(),
-        location: locationData,   // <--- From Auto GPS
-        address: address,         // <--- From Input
-        paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null,  // <--- Payment Amount
-        imageUrl: imageUrl        // <--- Save Image URL
+        location: locationData,   
+        address: address,         
+        paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null,
+        image: imageUrl 
       });
 
-      console.log("✅ Success! Request created.");
+      console.log("✅ Success! Request created:", requestId);
       Alert.alert("הצלחה", "הבקשה פורסמה בהצלחה!");
       router.back();
 
     } catch (err) {
       console.error("❌ Error writing document:", err);
-      if (err instanceof Error) {
-        Alert.alert("Error", err.message);
-      } else {
-        Alert.alert("Error", "Unknown error occurred");
-      }
+      Alert.alert("Error", "Save failed");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{paddingBottom: 40}}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={{paddingBottom: 40}}
+      keyboardShouldPersistTaps="handled"
+    >
       
-      {/* --- Title Input --- */}
       <Text style={styles.label}>כותרת הבקשה</Text>
       <TextInput
         value={title}
@@ -203,21 +171,62 @@ export default function NewRequestScreen() {
         textAlign="right"
       />
 
-      {/* --- Address Input --- */}
-      <Text style={styles.label}>כתובת</Text>
-      <TextInput
-        value={address}
-        onChangeText={setAddress}
-        style={styles.inputSingle}
-        placeholder="רוטשילד 10, תל אביב"
-        placeholderTextColor="#999"
-        textAlign="right"
-      />
+      <Text style={styles.label}>מיקום המשימה</Text>
+      <View style={styles.autocompleteWrapper}>
+        <GooglePlacesAutocomplete
+          placeholder='חפש כתובת, עיר או עסק...'
+          onPress={(data: GooglePlaceData, details: GooglePlaceDetail | null = null) => {
+            setAddress(data.description);
+          }}
+          query={{
+            key: process.env.EXPO_PUBLIC_GOOGLE_API_KEY, 
+            language: 'he', 
+            components: 'country:il', 
+          }}
+          enablePoweredByContainer={false}
+          textInputProps={{
+            onChangeText: (text) => setAddress(text),
+            value: address,
+          }}
+          styles={{
+            container: { flex: 0, width: '100%' },
+            textInput: {
+              height: 50,
+              borderWidth: 1,
+              borderColor: '#ddd',
+              borderRadius: 10,
+              paddingHorizontal: 15,
+              backgroundColor: '#fff',
+              fontSize: 16,
+              textAlign: 'right', 
+              marginBottom: 5,
+            },
+            listView: {
+              position: 'absolute', 
+              top: 55, 
+              zIndex: 1000, 
+              elevation: 1000, 
+              backgroundColor: 'white',
+              borderRadius: 5,
+              borderWidth: 1,
+              borderColor: '#ddd',
+            },
+            row: {
+              backgroundColor: '#FFFFFF',
+              padding: 13,
+              height: 44,
+              flexDirection: 'row-reverse', 
+            },
+            description: {
+              fontWeight: 'bold',
+              textAlign: 'right', 
+            },
+          }}
+        />
+      </View>
       
-      {/* Location Status Text */}
       <Text style={styles.locationStatus}>{locationStatus}</Text>
 
-      {/* --- Photo Input --- */}
       <Text style={styles.label}>תמונה</Text>
       <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
         <Text style={styles.photoButtonText}>
@@ -237,7 +246,6 @@ export default function NewRequestScreen() {
         </View>
       )}
 
-      {/* --- Payment Amount Input --- */}
       <Text style={styles.label}>סה"כ לתשלום</Text>
       <View style={styles.paymentContainer}>
         <Text style={styles.currencySymbol}>₪</Text>
@@ -252,7 +260,6 @@ export default function NewRequestScreen() {
         />
       </View>
 
-      {/* --- Description Input --- */}
       <Text style={styles.label}>תיאור מפורט</Text>
       <TextInput
         value={description}
@@ -265,7 +272,6 @@ export default function NewRequestScreen() {
         textAlignVertical="top"
       />
 
-      {/* --- Buttons --- */}
       <TouchableOpacity style={styles.publishButton} onPress={publish} disabled={loading}>
         {loading ? (
           <ActivityIndicator color="white" />
@@ -288,134 +294,22 @@ export default function NewRequestScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#FAF8EF" },
-  
-  label: { 
-    fontSize: 18, 
-    marginBottom: 8, 
-    marginTop: 10,
-    color: "#6f411d", 
-    fontWeight: "600", 
-    textAlign: "right" 
-  },
-  
-  inputSingle: { 
-    height: 50, 
-    backgroundColor: "white", 
-    borderRadius: 12, 
-    paddingHorizontal: 15, 
-    textAlign: "right", 
-    borderWidth: 1, 
-    borderColor: "#ddd", 
-    fontSize: 16 
-  },
-
-  paymentContainer: {
-    position: "relative",
-    height: 150,
-  },
-  inputPayment: {
-    height: 150,
-    backgroundColor: "white",
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingLeft: 60,
-    paddingVertical: 20,
-    textAlign: "right",
-    borderWidth: 2,
-    borderColor: "#588157",
-    fontSize: 56,
-    fontWeight: "700",
-  },
-  currencySymbol: {
-    position: "absolute",
-    left: 20,
-    top: 0,
-    bottom: 0,
-    fontSize: 40,
-    fontWeight: "700",
-    color: "#588157",
-    textAlignVertical: "center",
-    zIndex: 1,
-    lineHeight: 150,
-  },
-
-  inputMulti: { 
-    height: 120, 
-    backgroundColor: "white", 
-    borderRadius: 12, 
-    padding: 15, 
-    textAlignVertical: "top", 
-    textAlign: "right", 
-    borderWidth: 1, 
-    borderColor: "#ddd", 
-    marginBottom: 30, 
-    fontSize: 16 
-  },
-  
-  locationStatus: {
-    textAlign: 'right',
-    color: '#588157',
-    fontSize: 12,
-    marginTop: 4,
-    marginBottom: 5,
-    fontWeight: 'bold'
-  },
-
-  photoButton: {
-    backgroundColor: "white",
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#588157",
-    borderStyle: "dashed",
-    alignItems: "center",
-    marginBottom: 15,
-  },
-  photoButtonText: {
-    color: "#588157",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-
-  imagePreviewContainer: {
-    marginBottom: 15,
-    alignItems: "center",
-  },
-  imagePreview: {
-    width: "100%",
-    height: 200,
-    borderRadius: 12,
-    marginBottom: 10,
-    backgroundColor: "#f0f0f0",
-  },
-  removeImageButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  removeImageText: {
-    color: "#d32f2f",
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "right",
-  },
-
-  publishButton: { 
-    backgroundColor: "#588157", 
-    paddingVertical: 16, 
-    borderRadius: 12, 
-    alignItems: "center", 
-    marginBottom: 15,
-    marginTop: 10
-  },
+  label: { fontSize: 18, marginBottom: 8, marginTop: 10, color: "#6f411d", fontWeight: "600", textAlign: "right" },
+  inputSingle: { height: 50, backgroundColor: "white", borderRadius: 12, paddingHorizontal: 15, textAlign: "right", borderWidth: 1, borderColor: "#ddd", fontSize: 16 },
+  autocompleteWrapper: { marginBottom: 15, zIndex: 10, elevation: 10 },
+  paymentContainer: { position: "relative", height: 150, zIndex: 1, elevation: 1 },
+  inputPayment: { height: 150, backgroundColor: "white", borderRadius: 16, paddingHorizontal: 20, paddingLeft: 60, paddingVertical: 20, textAlign: "right", borderWidth: 2, borderColor: "#588157", fontSize: 56, fontWeight: "700" },
+  currencySymbol: { position: "absolute", left: 20, top: 0, bottom: 0, fontSize: 40, fontWeight: "700", color: "#588157", textAlignVertical: "center", zIndex: 1, lineHeight: 150 },
+  inputMulti: { height: 120, backgroundColor: "white", borderRadius: 12, padding: 15, textAlignVertical: "top", textAlign: "right", borderWidth: 1, borderColor: "#ddd", marginBottom: 30, fontSize: 16 },
+  locationStatus: { textAlign: 'right', color: '#588157', fontSize: 12, marginTop: 4, marginBottom: 5, fontWeight: 'bold' },
+  photoButton: { backgroundColor: "white", paddingVertical: 16, borderRadius: 12, borderWidth: 2, borderColor: "#588157", borderStyle: "dashed", alignItems: "center", marginBottom: 15 },
+  photoButtonText: { color: "#588157", fontSize: 16, fontWeight: "600" },
+  imagePreviewContainer: { marginBottom: 15, alignItems: "center" },
+  imagePreview: { width: "100%", height: 200, borderRadius: 12, marginBottom: 10, backgroundColor: "#f0f0f0" },
+  removeImageButton: { paddingVertical: 8, paddingHorizontal: 16 },
+  removeImageText: { color: "#d32f2f", fontSize: 14, fontWeight: "600", textAlign: "right" },
+  publishButton: { backgroundColor: "#588157", paddingVertical: 16, borderRadius: 12, alignItems: "center", marginBottom: 15, marginTop: 10 },
   publishText: { color: "white", fontSize: 18, fontWeight: "600" },
-  
-  cancelButton: { 
-    backgroundColor: "white", 
-    paddingVertical: 16, 
-    borderRadius: 12, 
-    borderWidth: 2, 
-    borderColor: "#588157", 
-    alignItems: "center" 
-  },
+  cancelButton: { backgroundColor: "white", paddingVertical: 16, borderRadius: 12, borderWidth: 2, borderColor: "#588157", alignItems: "center" },
   cancelText: { color: "#588157", fontSize: 18, fontWeight: "600" },
 });
