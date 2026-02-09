@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
     backgroundColor: '#fff',
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   closeButton: {
     position: 'absolute',
     right: 20,
-    top: 60,
+    top: 20,
   },
 
   closeButtonText: {
@@ -142,6 +142,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#6f411d',
+    top: 0,
   },
 
   content: {

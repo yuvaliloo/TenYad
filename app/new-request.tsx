@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -155,11 +155,23 @@ export default function NewRequestScreen() {
   };
 
   return (
-    <ScrollView 
-      style={styles.container} 
-      contentContainerStyle={{paddingBottom: 40}}
-      keyboardShouldPersistTaps="handled"
-    >
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
+          <Text style={styles.closeButtonText}>✕</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>יצירת משימה חדשה</Text>
+      </View>
+
+      <FlatList 
+        data={[]}
+        renderItem={null}
+        style={styles.content} 
+        contentContainerStyle={{paddingBottom: 40}}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <>
       
       <Text style={styles.label}>כותרת הבקשה</Text>
       <TextInput
@@ -288,12 +300,54 @@ export default function NewRequestScreen() {
         <Text style={styles.cancelText}>ביטול</Text>
       </TouchableOpacity>
 
-    </ScrollView>
+          </>
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#FAF8EF" },
+  container: {
+    flex: 1,
+    backgroundColor: '#FAF8EF',
+  },
+  
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+
+  closeButton: {
+    position: 'absolute',
+    right: 20,
+    top: 20,
+  },
+
+  closeButtonText: {
+    fontSize: 28,
+    color: '#333',
+  },
+
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#6f411d',
+  },
+
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+
   label: { fontSize: 18, marginBottom: 8, marginTop: 10, color: "#6f411d", fontWeight: "600", textAlign: "right" },
   inputSingle: { height: 50, backgroundColor: "white", borderRadius: 12, paddingHorizontal: 15, textAlign: "right", borderWidth: 1, borderColor: "#ddd", fontSize: 16 },
   autocompleteWrapper: { marginBottom: 15, zIndex: 10, elevation: 10 },

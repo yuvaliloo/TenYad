@@ -254,10 +254,28 @@ export default function FrontPage() {
   return (
     <View style={styles.container}>
 
+      {/* Mode Toggle */}
+      <View style={styles.segmentedContainer}>
+        <View style={styles.segment}>
+          <TouchableOpacity
+            style={[styles.segmentButton, !taskerMode && styles.segmentButtonActive]}
+            onPress={() => setTaskerMode(false)}
+          >
+            <Text style={[styles.segmentText, !taskerMode && styles.segmentTextActive]}>לקבל יד</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentButton, taskerMode && styles.segmentButtonActive]}
+            onPress={() => setTaskerMode(true)}
+          >
+            <Text style={[styles.segmentText, taskerMode && styles.segmentTextActive]}>לתת יד</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* --- TASKER MODE UI --- */}
       {taskerMode ? (
         <>
-          <Text style={styles.taskerHeader}>ברוך הבא למצב נותן יד</Text>
+          <Text style={styles.taskerHeader}>ברוך הבא למצב לתת יד</Text>
           <Text style={styles.taskerSubtitle}>בחר משימה והתחל להרוויח</Text>
 
           {loading ? (
@@ -356,7 +374,7 @@ export default function FrontPage() {
                           onPress={() => toggleRequestVisibility(r.id)}
                         >
                           <Text style={styles.closeButtonText}>
-                            {hiddenRequests.has(r.id) ? 'הצג בקשות' : 'הסתר בקשות'}
+                            {hiddenRequests.has(r.id) ? 'הצג מעוניינים' : 'הסתר מעוניינים'}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity 
@@ -421,6 +439,7 @@ export default function FrontPage() {
                     </View>
                   ))
                 ) : (
+                  
                   <Text style={styles.emptyText}>אין משימות סגורות</Text>
                 )}
               </View>
@@ -429,18 +448,7 @@ export default function FrontPage() {
         </>
       )}
 
-      {/* Helper Switch */}
-      <View style={styles.helperSwitchContainer}>
-        <Switch
-          value={taskerMode}
-          onValueChange={(value) => setTaskerMode(value)}
-          thumbColor={taskerMode ? "#588157" : "#ccc"}
-          trackColor={{ false: "#ddd", true: "#a3c9a8" }}
-        />
-        <Text style={styles.helperSwitchText}>
-          {taskerMode ? "עבור למצב מקבל יד" : "עבור למצב נותן יד"}
-        </Text>
-      </View>
+
 
       {/* Tasker Details Modal (With Accept Logic) */}
       <Modal
@@ -473,8 +481,8 @@ export default function FrontPage() {
                 <View style={styles.modalSection}>
                   <Text style={styles.modalRatingText}>
                     {selectedTasker.rating 
-                        ? `⭐ ${selectedTasker.rating}/5` 
-                        : (computedRating ? `⭐ ${computedRating}/5` : 'טרם דורג')}
+                        ? `⭐ ${Number(selectedTasker.rating)}/5` 
+                        : (computedRating ? `⭐ ${Number(computedRating)}/5` : 'טרם דורג')}
                   </Text>
                 </View>
 
@@ -584,10 +592,10 @@ const styles = StyleSheet.create({
   },
 
   greeting: {
-    marginTop: 70,
+    marginTop: 20,
     fontSize: 24,
     textAlign: "right",
-    marginRight: 12,
+    marginRight: 6,
     fontWeight: "600",
     color: "#6f411d",
   },
@@ -736,19 +744,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
 
-  helperSwitchContainer: {
-    position: "absolute",
-    top: 60,
-    left: 20,
-    alignItems: "center",
-  },
 
-  helperSwitchText: {
-    marginTop: 6,
-    fontSize: 14,
-    color: "#6f411d",
-    fontWeight: "500",
-  },
 
   // Tasker Mode Styles
   taskerHeader: {
@@ -757,7 +753,7 @@ const styles = StyleSheet.create({
     color: "#6f411d",
     textAlign: "center",
     marginBottom: 8,
-    marginTop: 110,
+    marginTop: 20,
   },
 
   taskerSubtitle: {
