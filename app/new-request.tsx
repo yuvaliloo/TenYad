@@ -15,16 +15,18 @@ import {
   TouchableOpacity,
   View,
   KeyboardAvoidingView, 
-  Platform
+  Platform,
+  LogBox
 } from "react-native";
 import { auth, db } from './services/firebase';
 import { uploadImage } from './services/storage';
 
+LogBox.ignoreLogs(['VirtualizedLists should never be nested']);
+
 export default function NewRequestScreen() {
-  // Device Location (GPS) - Used as fallback or for initial region
   const [deviceLocation, setDeviceLocation] = useState<Location.LocationObject | null>(null);
   
-  // 📍 SELECTED LOCATION (From Address) - This is what we want to save!
+  // 📍 SELECTED LOCATION (This is the only one that matters now)
   const [selectedCoords, setSelectedCoords] = useState<{lat: number, lng: number} | null>(null);
 
   const [address, setAddress] = useState(""); 
@@ -33,42 +35,33 @@ export default function NewRequestScreen() {
   const [photo, setPhoto] = useState<string | null>(null); 
   const [paymentAmount, setPaymentAmount] = useState(""); 
   const [loading, setLoading] = useState(false);
-  const [locationStatus, setLocationStatus] = useState("מאתר מיקום...");
 
-  // 1. Get Device Location Automatically (Just for helper, not for saving)
+  // 1. Get Device Location (Background only - for better autocomplete results)
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setLocationStatus("אין אישור מיקום");
-        return;
-      }
-      try {
-        let loc = await Location.getCurrentPositionAsync({});
-        setDeviceLocation(loc);
-        setLocationStatus("📍 מיקום נוכחי זוהה (אופציונלי)");
-      } catch (err) {
-        setLocationStatus("שגיאה בזיהוי מיקום");
+      if (status === 'granted') {
+        try {
+          let loc = await Location.getCurrentPositionAsync({});
+          setDeviceLocation(loc);
+        } catch (err) {
+          // Ignore errors, we don't show this to the user anymore
+        }
       }
     })();
   }, []);
 
   const handlePaymentChange = (text: string) => {
     const numericValue = text.replace(/[^0-9.]/g, '');
-    const parts = numericValue.split('.');
-    const filteredValue = parts.length > 2 
-      ? parts[0] + '.' + parts.slice(1).join('')
-      : numericValue;
-    setPaymentAmount(filteredValue);
+    setPaymentAmount(numericValue);
   };
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert("אין הרשאה", "אנא אפשר גישה למצלמה בהגדרות");
+      Alert.alert("אין הרשאה", "אנא אפשר גישה למצלמה");
       return;
     }
-
     Alert.alert("בחר תמונה", "מאיפה תרצה לבחור תמונה?", [
       {
         text: "מצלמה",
@@ -76,7 +69,6 @@ export default function NewRequestScreen() {
           const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: false,
-            aspect: [4, 3],
             quality: 0.5,
           });
           if (!result.canceled && result.assets[0]) setPhoto(result.assets[0].uri);
@@ -88,7 +80,6 @@ export default function NewRequestScreen() {
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
-            aspect: [4, 3],
             quality: 0.5,
           });
           if (!result.canceled && result.assets[0]) setPhoto(result.assets[0].uri);
@@ -104,9 +95,15 @@ export default function NewRequestScreen() {
       return;
     }
     
+    // 🛑 STRICT VALIDATION: Must have coords from dropdown
+    if (!selectedCoords) {
+      Alert.alert("שגיאה בכתובת", "יש לבחור כתובת מתוך הרשימה (לא רק להקליד)");
+      return;
+    }
+    
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("שגיאה", "עליך להתחבר כדי לפרסם בקשה");
+      Alert.alert("שגיאה", "עליך להתחבר");
       return;
     }
 
@@ -114,23 +111,14 @@ export default function NewRequestScreen() {
 
     try {
       const newRequestRef = doc(collection(db, "requests"));
-      const requestId = newRequestRef.id;
       
       let imageUrl = null;
       if (photo) {
-          imageUrl = await uploadImage(photo, "task_pics", requestId);
+          imageUrl = await uploadImage(photo, "task_pics", newRequestRef.id);
       }
 
-      // 📍 LOGIC FIX: Prioritize the Selected Address Coordinates
-      let finalGeoPoint = null;
-
-      if (selectedCoords) {
-        // Option A: User selected an address from Google
-        finalGeoPoint = new GeoPoint(selectedCoords.lat, selectedCoords.lng);
-      } else if (deviceLocation) {
-        // Option B: Fallback to GPS if they typed manually but have GPS on (less accurate for address)
-        finalGeoPoint = new GeoPoint(deviceLocation.coords.latitude, deviceLocation.coords.longitude);
-      }
+      console.log("🚀 Saving Address Coords:", selectedCoords);
+      const finalGeoPoint = new GeoPoint(selectedCoords.lat, selectedCoords.lng);
 
       await setDoc(newRequestRef, {
         title: title,            
@@ -140,19 +128,18 @@ export default function NewRequestScreen() {
         status: "open",
         worker: "OPEN", 
         createdAt: serverTimestamp(),
-        location: finalGeoPoint, // 👈 Saving the correct location now!
+        location: finalGeoPoint, // 👈 Correct Location
         address: address,         
         paymentAmount: paymentAmount ? parseFloat(paymentAmount) : null,
         image: imageUrl 
       });
 
-      console.log("✅ Request created:", requestId);
-      Alert.alert("הצלחה", "הבקשה פורסמה בהצלחה!");
+      Alert.alert("הצלחה", "הבקשה פורסמה!");
       router.back();
 
     } catch (err) {
-      console.error("❌ Error creating request:", err);
-      Alert.alert("Error", "Unknown error occurred");
+      console.error(err);
+      Alert.alert("Error", "Failed to save request");
     } finally {
       setLoading(false);
     }
@@ -179,45 +166,41 @@ export default function NewRequestScreen() {
         textAlign="right"
       />
 
-      {/* --- GOOGLE AUTOCOMPLETE SECTION --- */}
       <Text style={styles.label}>מיקום המשימה</Text>
-      
       <View style={styles.autocompleteWrapper}>
         <GooglePlacesAutocomplete
-          placeholder='חפש כתובת, עיר או עסק...'
-          
-          // 1. THIS IS CRITICAL: Fetch Geometry (Lat/Lng)
+          placeholder='הכנס כתובת מלאה...'
           fetchDetails={true} 
-
-          onPress={(data: GooglePlaceData, details: GooglePlaceDetail | null = null) => {
-            setAddress(data.description);
-            
-            // 2. Capture the Lat/Lng from the details
-            if (details?.geometry?.location) {
-              const { lat, lng } = details.geometry.location;
-              setSelectedCoords({ lat, lng });
-              console.log("📍 Address Selected:", lat, lng);
-            }
-          }}
-
           query={{
             key: process.env.EXPO_PUBLIC_GOOGLE_API_KEY, 
             language: 'he', 
-            components: 'country:il', 
+            components: 'country:il',
+            // Uses device location to bias results (find closer places first)
+            location: deviceLocation ? `${deviceLocation.coords.latitude},${deviceLocation.coords.longitude}` : undefined,
+            radius: 10000, 
+            fields: 'geometry,formatted_address,name'
+          }}
+          onPress={(data: GooglePlaceData, details: GooglePlaceDetail | null = null) => {
+            setAddress(data.description || details?.formatted_address || "");
+            if (details?.geometry?.location) {
+              const { lat, lng } = details.geometry.location;
+              setSelectedCoords({ lat, lng });
+            }
           }}
           enablePoweredByContainer={false}
-          
           textInputProps={{
-            onChangeText: (text) => setAddress(text),
+            onChangeText: (text) => {
+              setAddress(text);
+              setSelectedCoords(null); // Reset coords if they type manually
+            },
             value: address,
           }}
-          
           styles={{
             container: { flex: 0, width: '100%' },
             textInput: {
               height: 50,
               borderWidth: 1,
-              borderColor: '#ddd',
+              borderColor: selectedCoords ? '#588157' : '#ddd', // Green border when valid
               borderRadius: 10,
               paddingHorizontal: 15,
               backgroundColor: '#fff',
@@ -226,14 +209,15 @@ export default function NewRequestScreen() {
               marginBottom: 5,
             },
             listView: {
-              position: 'absolute', 
-              top: 55, 
-              zIndex: 1000,   
-              elevation: 1000, 
+              zIndex: 9999,
+              position: 'absolute',
+              top: 55,
+              width: '100%',
               backgroundColor: 'white',
-              borderRadius: 5,
               borderWidth: 1,
-              borderColor: '#ddd',
+              borderColor: '#ccc',
+              borderRadius: 5,
+              elevation: 5,
             },
             row: {
               backgroundColor: '#FFFFFF',
@@ -249,7 +233,18 @@ export default function NewRequestScreen() {
         />
       </View>
       
-      <Text style={styles.locationStatus}>{locationStatus}</Text>
+      {/* 🟢 THE STATUS TEXT (Matches your styling request) */}
+      <View style={{height: 25, justifyContent: 'center'}}>
+        {selectedCoords ? (
+            <Text style={styles.locationStatus}>
+                📍 מיקום המשימה אותר
+            </Text>
+        ) : (
+            <Text style={styles.missingLocation}>
+                * חובה לבחור כתובת מהרשימה
+            </Text>
+        )}
+      </View>
 
       <Text style={styles.label}>תמונה</Text>
       <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
@@ -289,7 +284,7 @@ export default function NewRequestScreen() {
         value={description}
         onChangeText={setDescription}
         style={styles.inputMulti}
-        placeholder="...פרט כאן מה בדיוק נדרש"
+        placeholder="...פרט כאן"
         placeholderTextColor="#999"
         multiline
         textAlign="right"
@@ -321,19 +316,36 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: "#FAF8EF" },
   label: { fontSize: 18, marginBottom: 8, marginTop: 10, color: "#6f411d", fontWeight: "600", textAlign: "right" },
   inputSingle: { height: 50, backgroundColor: "white", borderRadius: 12, paddingHorizontal: 15, textAlign: "right", borderWidth: 1, borderColor: "#ddd", fontSize: 16 },
-  autocompleteWrapper: { marginBottom: 15, zIndex: 100, elevation: 10 },
+  autocompleteWrapper: { marginBottom: 5, zIndex: 100, elevation: 10 },
+  
+  // 🟢 Green Success Style
+  locationStatus: { 
+    textAlign: 'right', 
+    color: '#588157', // Dark Green
+    fontSize: 14, 
+    fontWeight: 'bold',
+  },
+  
+  // 🔴 Missing Warning Style
+  missingLocation: {
+    textAlign: 'right',
+    color: '#999',
+    fontSize: 12,
+    fontStyle: 'italic'
+  },
+
   paymentContainer: { position: "relative", height: 150, zIndex: 1, elevation: 1 },
   inputPayment: { height: 150, backgroundColor: "white", borderRadius: 16, paddingHorizontal: 20, paddingLeft: 60, paddingVertical: 20, textAlign: "right", borderWidth: 2, borderColor: "#588157", fontSize: 56, fontWeight: "700" },
   currencySymbol: { position: "absolute", left: 20, top: 0, bottom: 0, fontSize: 40, fontWeight: "700", color: "#588157", textAlignVertical: "center", zIndex: 1, lineHeight: 150 },
   inputMulti: { height: 120, backgroundColor: "white", borderRadius: 12, padding: 15, textAlignVertical: "top", textAlign: "right", borderWidth: 1, borderColor: "#ddd", marginBottom: 30, fontSize: 16 },
-  locationStatus: { textAlign: 'right', color: '#588157', fontSize: 12, marginTop: 4, marginBottom: 5, fontWeight: 'bold' },
+  
   photoButton: { backgroundColor: "white", paddingVertical: 16, borderRadius: 12, borderWidth: 2, borderColor: "#588157", borderStyle: "dashed", alignItems: "center", marginBottom: 15 },
   photoButtonText: { color: "#588157", fontSize: 16, fontWeight: "600" },
   imagePreviewContainer: { marginBottom: 15, alignItems: "center" },
   imagePreview: { width: "100%", height: 200, borderRadius: 12, marginBottom: 10, backgroundColor: "#f0f0f0" },
   removeImageButton: { paddingVertical: 8, paddingHorizontal: 16 },
   removeImageText: { color: "#d32f2f", fontSize: 14, fontWeight: "600", textAlign: "right" },
-  publishButton: { backgroundColor: "#588157", paddingVertical: 16, borderRadius: 12, alignItems: "center", marginBottom: 15, marginTop: 10 },
+  publishButton: { backgroundColor: "#588157", paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 15, marginTop: 10 },
   publishText: { color: "white", fontSize: 18, fontWeight: "600" },
   cancelButton: { backgroundColor: "white", paddingVertical: 16, borderRadius: 12, borderWidth: 2, borderColor: "#588157", alignItems: "center" },
   cancelText: { color: "#588157", fontSize: 18, fontWeight: "600" },

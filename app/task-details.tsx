@@ -1,23 +1,20 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { arrayUnion, doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'; // Added onSnapshot & serverTimestamp
+import { arrayUnion, doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'; 
 import { useState, useEffect } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Image, ActivityIndicator } from 'react-native';
 import { auth, db } from './services/firebase';
-import PayPalModal from '../components/PayPalModal'; // 👈 Make sure this file exists
+import PayPalModal from '../components/PayPalModal'; 
 
 export default function TaskDetails() {
-  const { id } = useLocalSearchParams(); // We only rely on ID, we fetch the rest fresh
+  const { id } = useLocalSearchParams(); 
   const [request, setRequest] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(auth.currentUser);
   
-  // 💳 PayPal State
   const [isPayModalVisible, setPayModalVisible] = useState(false);
 
-  // 1. 🔄 Real-time Listener (Crucial for Status Updates)
   useEffect(() => {
     if (!id) return;
-    
     const requestRef = doc(db, 'requests', id as string);
     const unsubscribe = onSnapshot(requestRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -27,11 +24,7 @@ export default function TaskDetails() {
         router.back();
       }
       setLoading(false);
-    }, (error) => {
-      console.error("Fetch Error:", error);
-      setLoading(false);
     });
-
     return () => unsubscribe();
   }, [id]);
 
@@ -43,18 +36,16 @@ export default function TaskDetails() {
     );
   }
 
-  // --- 🎭 ROLES ---
   const isSeeker = user?.uid === request.seekerId;
-  const isWorker = user?.uid === request.workerId; // Needs to be assigned in DB logic
   const isApplicant = request.interestedTaskers?.some((t: any) => t.taskerId === user?.uid);
+  
+  // Logic to determine if I am the active worker
+  const isWorker = user?.uid === request.workerId || (request.status === 'in_progress' && isApplicant);
 
-  // --- ⚡ ACTIONS ---
+  // --- ACTIONS ---
 
-  // 1. APPLY (For new users)
   const handleApply = async () => {
     if (!user) return Alert.alert('שגיאה', 'עליך להתחבר');
-    if (isApplicant) return Alert.alert('שים לב', 'כבר הגשת בקשה למשימה זו');
-
     try {
       await updateDoc(doc(db, 'requests', id as string), {
         interestedTaskers: arrayUnion({
@@ -63,17 +54,16 @@ export default function TaskDetails() {
           timestamp: new Date().toISOString()
         })
       });
-      Alert.alert('הצלחה', 'הבקשה נשלחה לבעל המשימה!');
+      Alert.alert('הצלחה', 'הבקשה נשלחה!');
     } catch (error) {
       Alert.alert('Error', 'Failed to apply');
     }
   };
 
-  // 2. WORKER: MARK DONE
   const handleMarkAsDone = async () => {
     try {
       await updateDoc(doc(db, "requests", id as string), {
-        status: "pending_payment", // 🔒 Moves state forward
+        status: "pending_payment", 
         completedAt: serverTimestamp()
       });
       Alert.alert("סטטוס עודכן", "הודעה נשלחה למבקש לאישור ותשלום.");
@@ -82,18 +72,18 @@ export default function TaskDetails() {
     }
   };
 
-  // 3. SEEKER: PAY & CLOSE
   const handlePaymentSuccess = async () => {
     try {
       await updateDoc(doc(db, "requests", id as string), {
-        status: "completed",       // 🔒 Job Closed
-        paymentStatus: "paid",     // 🔒 Money Confirmed
+        status: "completed",       
+        paymentStatus: "paid",     
         paidAt: serverTimestamp()
       });
       setPayModalVisible(false);
-      Alert.alert("תודה רבה!", "התשלום התקבל והמשימה נסגרה.");
+      Alert.alert("תשלום התקבל! 🏆", "המשימה הושלמה ונסגרה בהצלחה.");
       router.back();
     } catch (error) {
+      console.error(error);
       Alert.alert("Error", "Database update failed");
     }
   };
@@ -110,12 +100,10 @@ export default function TaskDetails() {
 
       <ScrollView style={styles.content}>
         
-        {/* 📸 IMAGE SECTION (Matches new-request) */}
         {request.image && (
            <Image source={{ uri: request.image }} style={styles.taskImage} resizeMode="cover" />
         )}
 
-        {/* TITLE & PRICE */}
         <View style={styles.titleRow}>
            <Text style={styles.title}>{request.title}</Text>
            {request.paymentAmount && (
@@ -123,18 +111,21 @@ export default function TaskDetails() {
            )}
         </View>
 
-        {/* DETAILS */}
+        <View style={[styles.statusBar, { backgroundColor: getStatusColor(request.status) }]}>
+            <Text style={styles.statusText}>{getStatusText(request.status)}</Text>
+        </View>
+
+        {/* DETAILS CARD */}
         <View style={styles.card}>
           <InfoRow label="תיאור" value={request.description} />
-          <InfoRow label="כתובת" value={request.address || request.location?.latitude ? "מיקום במפה" : "לא צוין"} />
-          <InfoRow label="סטטוס" value={getStatusText(request.status)} color={getStatusColor(request.status)} />
+          {/* 🟢 Fix 1: Display the Address explicitly */}
+          <InfoRow label="כתובת" value={request.address || "לא צוין"} />
           <InfoRow label="פורסם ע״י" value={request.seekerName || 'אנונימי'} />
         </View>
 
-        {/* --- 🧠 DYNAMIC ACTION AREA --- */}
+        {/* ACTION AREA */}
         <View style={styles.actionArea}>
             
-            {/* SCENARIO A: Job is Open -> Apply */}
             {!request.workerId && request.status === 'open' && (
                 <TouchableOpacity 
                     style={[styles.mainButton, isApplicant && styles.disabledButton]} 
@@ -147,17 +138,15 @@ export default function TaskDetails() {
                 </TouchableOpacity>
             )}
 
-            {/* SCENARIO B: I am Worker -> Mark Done */}
             {isWorker && request.status === 'in_progress' && (
                 <TouchableOpacity style={styles.mainButton} onPress={handleMarkAsDone}>
                     <Text style={styles.buttonText}>✅ סיימתי את העבודה</Text>
                 </TouchableOpacity>
             )}
 
-            {/* SCENARIO C: I am Seeker -> Approve & Pay */}
             {isSeeker && request.status === 'pending_payment' && (
                 <View>
-                    <Text style={styles.infoText}>העובד סימן שהמשימה בוצעה.</Text>
+                    <Text style={styles.infoText}>העובד דיווח על סיום. נא לאשר ולשלם.</Text>
                     <TouchableOpacity 
                         style={[styles.mainButton, styles.payButton]} 
                         onPress={() => setPayModalVisible(true)}
@@ -167,17 +156,15 @@ export default function TaskDetails() {
                 </View>
             )}
 
-            {/* SCENARIO D: Job Completed */}
             {request.status === 'completed' && (
                 <View style={styles.completedBadge}>
-                    <Text style={styles.completedText}>🏆 המשימה הושלמה</Text>
+                    <Text style={styles.completedText}>🏆 המשימה הושלמה ושולמה</Text>
                 </View>
             )}
         </View>
 
       </ScrollView>
 
-      {/* PAYPAL MODAL */}
       <PayPalModal 
         visible={isPayModalVisible}
         amount={parseFloat(request.paymentAmount) || 0}
@@ -188,11 +175,13 @@ export default function TaskDetails() {
   );
 }
 
-// --- 🛠️ HELPER COMPONENTS ---
-const InfoRow = ({ label, value, color }: { label: string, value: string, color?: string }) => (
+// --- HELPER COMPONENTS ---
+
+// 🟢 Fix 2: InfoRow updated for RTL
+const InfoRow = ({ label, value }: { label: string, value: string }) => (
   <View style={styles.row}>
-    <Text style={[styles.value, color ? { color, fontWeight: 'bold' } : {}]}>{value}</Text>
     <Text style={styles.label}>{label}:</Text>
+    <Text style={styles.value}>{value}</Text>
   </View>
 );
 
@@ -208,44 +197,63 @@ const getStatusText = (status: string) => {
 
 const getStatusColor = (status: string) => {
     switch(status) {
-        case 'open': return '#2ecc71';
-        case 'in_progress': return '#f39c12';
-        case 'pending_payment': return '#e74c3c';
-        case 'completed': return '#3498db';
-        default: return '#333';
+        case 'open': return '#2ecc71'; 
+        case 'in_progress': return '#f39c12'; 
+        case 'pending_payment': return '#e74c3c'; 
+        case 'completed': return '#3498db'; 
+        default: return '#999';
     }
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FAF8EF' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingBottom: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#ddd' },
   closeButton: { position: 'absolute', right: 20, top: 55, padding: 10 },
   closeButtonText: { fontSize: 24, color: '#333' },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#6f411d' },
-
   content: { flex: 1 },
-  
   taskImage: { width: '100%', height: 200, backgroundColor: '#ddd' },
   
+  // Title Row (RTL)
   titleRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#333', flex: 1, textAlign: 'right' },
+  title: { fontSize: 22, fontWeight: 'bold', color: '#333', flex: 1, textAlign: 'right', writingDirection: 'rtl' },
   priceTag: { fontSize: 20, fontWeight: 'bold', color: '#588157', backgroundColor: '#e8f5e9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, overflow: 'hidden' },
-
-  card: { backgroundColor: 'white', marginHorizontal: 20, padding: 15, borderRadius: 12, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4 },
-  row: { flexDirection: 'row-reverse', justifyContent: 'flex-start', marginBottom: 12 },
-  label: { fontSize: 14, color: '#888', marginLeft: 8, width: 70, textAlign: 'right' },
-  value: { fontSize: 16, color: '#333', flex: 1, textAlign: 'right' },
+  
+  statusBar: { width: '100%', padding: 8, alignItems: 'center', justifyContent: 'center' },
+  statusText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  
+  card: { backgroundColor: 'white', marginHorizontal: 20, marginTop: 15, padding: 15, borderRadius: 12, elevation: 2 },
+  
+  // 🟢 Fix 3: Row Styles for RTL
+  row: { 
+    flexDirection: 'row-reverse', // Label on right, Value on left
+    justifyContent: 'flex-start', // Start from right
+    marginBottom: 12,
+    alignItems: 'flex-start' // Align top if text wraps
+  },
+  label: { 
+    fontSize: 14, 
+    fontWeight: 'bold', 
+    color: '#888', 
+    marginLeft: 10, // Space between label and value
+    textAlign: 'right',
+    minWidth: 70 
+  },
+  value: { 
+    fontSize: 16, 
+    color: '#333', 
+    flex: 1, 
+    textAlign: 'right', // Ensure multi-line text aligns right
+    writingDirection: 'rtl' // Force RTL for mixed text
+  },
 
   actionArea: { padding: 20, paddingBottom: 40 },
-  infoText: { textAlign: 'center', marginBottom: 10, color: '#588157', fontWeight: 'bold' },
-  
+  infoText: { textAlign: 'center', marginBottom: 10, color: '#e74c3c', fontWeight: 'bold' },
   mainButton: { backgroundColor: '#588157', paddingVertical: 16, borderRadius: 12, alignItems: 'center', elevation: 3 },
-  payButton: { backgroundColor: '#2c3e50' }, // Dark Blue for payment
+  payButton: { backgroundColor: '#e74c3c' }, 
   disabledButton: { backgroundColor: '#ccc' },
   buttonText: { color: '#fff', fontSize: 18, fontWeight: '600' },
-
   completedBadge: { backgroundColor: '#dff9fb', padding: 20, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#c7ecee' },
   completedText: { fontSize: 20, fontWeight: 'bold', color: '#22a6b3' }
 });
