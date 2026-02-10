@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { collection, doc, onSnapshot, orderBy, query, updateDoc, where, serverTimestamp, deleteDoc } from "firebase/firestore"; 
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View, Alert } from "react-native";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert } from "react-native";
 import * as Location from 'expo-location'; 
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -124,7 +124,6 @@ export default function FrontPage() {
     });
   };
 
-  // 🟢 ADDED THIS MISSING FUNCTION
   const openReviewModal = (task: any) => {
     setReviewTask(task);
     setShowReviewModal(true);
@@ -190,10 +189,28 @@ export default function FrontPage() {
   return (
     <View style={styles.container}>
 
+      {/* 🟢 NEW: MODE TOGGLE (Pill Shape) */}
+      <View style={styles.segmentedContainer}>
+        <View style={styles.segment}>
+          <TouchableOpacity
+            style={[styles.segmentButton, !taskerMode && styles.segmentButtonActive]}
+            onPress={() => setTaskerMode(false)}
+          >
+            <Text style={[styles.segmentText, !taskerMode && styles.segmentTextActive]}>לקבל יד</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentButton, taskerMode && styles.segmentButtonActive]}
+            onPress={() => setTaskerMode(true)}
+          >
+            <Text style={[styles.segmentText, taskerMode && styles.segmentTextActive]}>לתת יד</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* --- TASKER MODE --- */}
       {taskerMode ? (
         <>
-          <Text style={styles.taskerHeader}>ברוך הבא למצב נותן יד</Text>
+          <Text style={styles.taskerHeader}>ברוך הבא למצב לתת יד</Text>
           <Text style={styles.taskerSubtitle}>בחר משימה והתחל להרוויח</Text>
           {loading ? <ActivityIndicator size="large" color="#588157" style={{marginTop: 20}} /> : (
             <ScrollView style={styles.taskerRequestsList}>
@@ -218,12 +235,15 @@ export default function FrontPage() {
         /* --- SEEKER MODE --- */
         <>
           <Text style={styles.greeting}>{getGreeting()}</Text>
+          
           <View style={styles.buttonsContainer}>
             <TouchableOpacity style={styles.buttonPrimary} onPress={() => router.push("/new-request")}>
               <Text style={styles.plusIcon}>+</Text>
               <Text style={styles.buttonPrimaryText}>צור משימה חדשה</Text>
             </TouchableOpacity>
           </View>
+
+          {/* TABS (Open/Closed) */}
           <View style={styles.segmentedContainer}>
             <View style={styles.segment}>
               <TouchableOpacity style={[styles.segmentButton, selectedTab === 'open' && styles.segmentButtonActive]} onPress={() => setSelectedTab('open')}>
@@ -246,6 +266,7 @@ export default function FrontPage() {
                           <Text style={styles.closeButtonText}>{hiddenRequests.has(r.id) ? 'הצג בקשות' : 'הסתר בקשות'}</Text>
                         </TouchableOpacity>
 
+                        {/* DELETE BUTTON */}
                         <TouchableOpacity 
                             style={styles.deleteButton}
                             onPress={() => handleDeleteRequest(r.id)}
@@ -256,6 +277,7 @@ export default function FrontPage() {
                         <Text style={styles.requestTitle}>{r.title}</Text>
                       </View>
                       
+                      {/* Candidates List */}
                       {!hiddenRequests.has(r.id) && r.interestedTaskers && r.interestedTaskers.length > 0 && (
                         <View style={styles.interestedTaskersContainer}>
                           <Text style={styles.interestedTaskersTitle}>מועמדים ({r.interestedTaskers.length})</Text>
@@ -319,11 +341,7 @@ export default function FrontPage() {
         </>
       )}
 
-      <View style={styles.helperSwitchContainer}>
-        <Switch value={taskerMode} onValueChange={(value) => setTaskerMode(value)} thumbColor={taskerMode ? "#588157" : "#ccc"} trackColor={{ false: "#ddd", true: "#a3c9a8" }} />
-        <Text style={styles.helperSwitchText}>{taskerMode ? "עבור למצב מקבל יד" : "עבור למצב נותן יד"}</Text>
-      </View>
-
+      {/* MODALS */}
       <TaskerProfileModal 
         visible={!!previewTasker}
         taskerId={previewTasker?.id || null}
@@ -362,22 +380,55 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
 }
 function deg2rad(deg: number) { return deg * (Math.PI / 180); }
 
+// --- 🟢 NEW STYLING APPLIED BELOW ---
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FAF8EF", paddingTop: 60, paddingHorizontal: 20 },
-  greeting: { marginTop: 40, fontSize: 24, textAlign: "center", fontWeight: "600", color: "#6f411d" },
-  buttonsContainer: { marginTop: 40, alignItems: "center" },
-  buttonPrimary: { backgroundColor: "#588157", width: 150, height: 150, borderRadius: 12, alignItems: "center", justifyContent: "center", elevation: 3 },
+  container: { 
+    flex: 1, 
+    backgroundColor: "#FAF8EF", 
+    paddingTop: 60, 
+    paddingHorizontal: 20 
+  },
+
+  greeting: { 
+    marginTop: 20, 
+    fontSize: 24, 
+    textAlign: "right", 
+    marginRight: 6,
+    fontWeight: "600", 
+    color: "#6f411d" 
+  },
+
+  buttonsContainer: { 
+    marginTop: 30, // Adjusted spacing
+    alignItems: "center" 
+  },
+
+  buttonPrimary: { 
+    backgroundColor: "#588157", 
+    width: 150, 
+    height: 150, 
+    borderRadius: 12, 
+    alignItems: "center", 
+    justifyContent: "center", 
+    elevation: 3 
+  },
+
   plusIcon: { color: "white", fontSize: 48, fontWeight: "600", marginBottom: 8 },
   buttonPrimaryText: { color: "white", fontSize: 16, fontWeight: "600", textAlign: "center" },
+
+  // PILL TOGGLE STYLE
   segmentedContainer: { marginTop: 30, alignItems: 'center', width: '100%' },
   segment: { flexDirection: 'row', backgroundColor: '#eee', borderRadius: 999, padding: 4, width: 260, justifyContent: 'space-between' },
   segmentButton: { flex: 1, paddingVertical: 8, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   segmentButtonActive: { backgroundColor: '#588157' },
   segmentText: { color: '#6f411d', fontWeight: '600' },
   segmentTextActive: { color: '#fff' },
+
   listsContainer: { marginTop: 24, width: "100%" },
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 18, fontWeight: "700", color: "#6f411d", marginBottom: 8, textAlign: "right" },
+  
+  // List Items
   requestItem: { backgroundColor: "#fff", padding: 12, borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: "#eee" },
   requestHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   deleteButton: { backgroundColor: "#e74c3c", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
@@ -386,9 +437,9 @@ const styles = StyleSheet.create({
   closeButtonText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   requestTitle: { fontSize: 16, color: "#333", textAlign: "right", flex: 1, marginRight: 10, fontWeight: 'bold' },
   emptyText: { color: "#c0392b", fontWeight: "600", textAlign: "right" },
-  helperSwitchContainer: { position: "absolute", top: 60, left: 20, alignItems: "center" },
-  helperSwitchText: { marginTop: 6, fontSize: 14, color: "#6f411d", fontWeight: "500" },
-  taskerHeader: { fontSize: 26, fontWeight: "700", color: "#6f411d", textAlign: "center", marginBottom: 8, marginTop: 110 },
+
+  // Tasker Mode Styles
+  taskerHeader: { fontSize: 26, fontWeight: "700", color: "#6f411d", textAlign: "center", marginBottom: 8, marginTop: 20 },
   taskerSubtitle: { fontSize: 16, color: "#888", textAlign: "center", marginBottom: 24 },
   taskerRequestsList: { flex: 1, marginTop: 20 },
   taskerRequestCard: { backgroundColor: "#fff", padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: "#ddd", elevation: 2 },
@@ -397,6 +448,8 @@ const styles = StyleSheet.create({
   taskerTakeButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   taskerEmptyText: { fontSize: 16, color: "#999", textAlign: "center", marginTop: 40 },
   distanceBadge: { fontSize: 14, color: "#588157", fontWeight: "bold", backgroundColor: "#e9f5e9", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, overflow: 'hidden' },
+
+  // Interested Taskers Styles
   interestedTaskersContainer: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#eee" },
   interestedTaskersTitle: { fontSize: 14, fontWeight: "600", color: "#588157", textAlign: "right", marginBottom: 10 },
   applicantRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9f9f9', padding: 10, borderRadius: 8, marginBottom: 8 },
@@ -407,6 +460,7 @@ const styles = StyleSheet.create({
   acceptText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
   previewButton: { backgroundColor: 'white', borderWidth: 1, borderColor: '#588157', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
   previewText: { color: '#588157', fontWeight: 'bold', fontSize: 13 },
+  
   miniAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#e1e1e1', justifyContent: 'center', alignItems: 'center', marginLeft: 10, overflow: 'hidden' },
   miniAvatarImage: { width: 40, height: 40, borderRadius: 20 },
   reviewButton: { backgroundColor: '#6f411d', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8 },
