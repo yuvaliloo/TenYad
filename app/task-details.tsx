@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { arrayUnion, doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'; 
+import { arrayUnion,getDoc, doc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'; 
 import { useState, useEffect } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Image, ActivityIndicator } from 'react-native';
 import { auth, db } from './services/firebase';
 import PayPalModal from '../components/PayPalModal'; 
+import { sendPushNotification } from './services/notifications'; // 👈 Import helper
 
 export default function TaskDetails() {
   const { id } = useLocalSearchParams(); 
@@ -12,7 +13,7 @@ export default function TaskDetails() {
   const [user, setUser] = useState(auth.currentUser);
   
   const [isPayModalVisible, setPayModalVisible] = useState(false);
-
+  
   useEffect(() => {
     if (!id) return;
     const requestRef = doc(db, 'requests', id as string);
@@ -54,7 +55,22 @@ export default function TaskDetails() {
           timestamp: new Date().toISOString()
         })
       });
-      Alert.alert('הצלחה', 'הבקשה נשלחה!');
+      if (request.seekerId) {
+          const seekerSnap = await getDoc(doc(db, "users", request.seekerId));
+          if (seekerSnap.exists()) {
+              const seekerData = seekerSnap.data();
+              if (seekerData.pushToken) {
+                  await sendPushNotification(
+                      seekerData.pushToken,
+                      "יש לך מועמד חדש! 🎉",
+                      `${user.displayName || "מישהו"} מעוניין לעזור לך במשימה "${request.title}"`
+                  );
+              }
+          }
+      }
+
+      Alert.alert('הצלחה', 'הבקשה נשלחה והודעה נשלחה למבקש!');
+      router.back();
     } catch (error) {
       Alert.alert('Error', 'Failed to apply');
     }

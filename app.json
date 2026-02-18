@@ -1,11 +1,11 @@
 {
   "expo": {
     "name": "QuickSolve",
-    "slug": "QuickSolve",
+    "slug": "quicksolve",
+    "owner": "yuvaliloo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/Hands-Hand-icon.png",
-    "scheme": "quicksolve",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -19,8 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.QuickSolve"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -39,11 +38,18 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e3b9fcf0-3d77-4cf9-83db-59f6d0f8263f"
+      }
     }
   }
 }

@@ -11,6 +11,7 @@ import PayPalModal from '../../components/PayPalModal';
 import TaskerProfileModal from '../../components/TaskerProfileModal'; 
 import { auth, db } from "../services/firebase";
 import { getReviewsWrittenByUser } from '../services/reviews';
+import { registerForPushNotificationsAsync } from '../services/notifications'; // 👈 Import
 
 export default function FrontPage() {
   const [taskerMode, setTaskerMode] = useState(false);
@@ -37,6 +38,11 @@ export default function FrontPage() {
   const [reviewedTaskIds, setReviewedTaskIds] = useState<Set<string>>(new Set());
 
   // --- 1. DATA FETCHING ---
+  useEffect(() => {
+    if (auth.currentUser) {
+        registerForPushNotificationsAsync(auth.currentUser.uid);
+    }
+  }, [auth.currentUser]);
   useEffect(() => {
     let firestoreUnsub: (() => void) | undefined;
 
