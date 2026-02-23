@@ -1,15 +1,18 @@
 import { Platform } from "react-native";
-import { initializeApp,getApp,getApps } from "firebase/app";
+import { initializeApp, getApp, getApps } from "firebase/app";
+
+// 🟢 FIX: Tell TypeScript to ignore the missing type definition
+// @ts-ignore
 import { 
   initializeAuth, 
   getReactNativePersistence, 
-  browserLocalPersistence 
+  getAuth 
 } from "firebase/auth";
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { initializeFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// ... Your Config Object ...
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -21,25 +24,27 @@ const firebaseConfig = {
 
 export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// 1. Determine which storage to use based on Platform
-let authPersistence;
+// 1. Determine Auth initialization based on Platform
+let auth: any;
 
 if (Platform.OS === 'web') {
-  // Use standard browser storage for Web
-  authPersistence = browserLocalPersistence;
+  // 🟢 WEB: getAuth automatically uses standard browser persistence safely
+  auth = getAuth(app);
 } else {
-  // Use AsyncStorage for iOS/Android
-  authPersistence = getReactNativePersistence(AsyncStorage);
+  // 📱 MOBILE: Inject AsyncStorage
+  // The try-catch prevents crashes during Expo Fast Refresh (hot reloads)
+  try {
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
+  } catch (error) {
+    auth = getAuth(app); // Fallback if already initialized
+  }
 }
 
-// 2. Initialize Auth with the correct persistence
-export const auth = initializeAuth(app, {
-  persistence: authPersistence,
-});
+export { auth };
 
 // 3. Initialize Firestore 
-// We only force long polling on Android (to fix the timer bug). 
-// Web and iOS work better with default settings.
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: Platform.OS === 'android',
 });

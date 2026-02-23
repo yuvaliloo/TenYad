@@ -75,6 +75,15 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = async () => {
+    if (Platform.OS === 'web') {
+      // 🌐 WEB: Use standard browser confirmation
+      const confirmLogout = window.confirm("האם אתה בטוח שברצונך להתנתק?");
+      if (confirmLogout) {
+        await signOut(auth);
+        router.replace("/login"); 
+      }
+    } else {
+      // 📱 MOBILE: Use React Native's native Alert
       Alert.alert("התנתקות", "האם אתה בטוח?", [
         { text: "ביטול", style: "cancel" },
         { text: "התנתק", style: "destructive", onPress: async () => {
@@ -82,8 +91,8 @@ export default function ProfileScreen() {
             router.replace("/login"); 
         }}
       ]);
+    }
   };
-
   const handleSaveProfile = async () => {
     if (!user) return;
     setLoading(true);
