@@ -26,21 +26,24 @@ To run this project on your machine and phone, you need a few things installed:
 
 ```bash
 npm install --legacy-peer-deps
-🚀 Running the App
+```
+## 🚀 Running the App
 You have three different ways to run the app depending on what you are testing and your Wi-Fi setup.
 
 Option 1: Web Mode (Best for testing Google Login)
 Since native Google Sign-In requires a compiled developer build, the easiest way to test authentication logic is directly in your computer's browser.
 
-Bash
+```bash
 npx expo start -w
+```
 Alternatively, run npx expo start and press w in the terminal.
 
 Option 2: Local Network (Standard Phone Testing)
 Use this if your computer and your phone are connected to the exact same Wi-Fi network.
 
-Bash
+```bash
 npx expo start
+```
 iOS: Open your iPhone's Camera app and scan the QR code that appears in the terminal. Tap the Expo link.
 
 Android: Open the Expo Go app and tap "Scan QR Code".
@@ -48,8 +51,9 @@ Android: Open the Expo Go app and tap "Scan QR Code".
 Option 3: Tunnel Mode (For Network Restrictions)
 If your Wi-Fi blocks local network connections (common on university or public networks), use a tunnel to route the app through the internet.
 
-Bash
+```bash
 npx expo start --tunnel
+```
 Note: This requires ngrok to be installed globally on your machine. Scan the QR code exactly as you would in Option 2.
 
 ⚠️ Important Developer Notes & Known Expo Go Limitations
