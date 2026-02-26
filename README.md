@@ -1,50 +1,64 @@
-# Welcome to your Expo app 👋
+# TenYad (תן יד) 🤝
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+TenYad is a community-driven task marketplace application built with React Native and Expo. It allows users to seamlessly switch between two modes:
+* **Seeker Mode (לקבל יד):** Request help with local tasks, review applicants, and securely pay for completed jobs.
+* **Tasker Mode (לתת יד):** Browse nearby open tasks, offer your services, and earn money while helping your community.
 
-## Get started
+Features include real-time location-based task matching, secure PayPal integration, user reviews, push notifications, and hybrid authentication (Email/Password & Google Sign-In).
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## 📱 Prerequisites
 
-2. Start the app
+To run this project on your machine and phone, you need a few things installed:
 
-   ```bash
-   npx expo start
-   ```
+1. **Node.js**: Download and install from [nodejs.org](https://nodejs.org/).
+2. **Expo Go App**: Download the "Expo Go" app on your physical smartphone from the Apple App Store (iOS) or Google Play Store (Android).
+3. **Expo CLI**: Comes pre-packaged with your project, but requires a terminal to run.
 
-In the output, you'll find options to open the app in a
+---
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 🛠️ Installation
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+1. Clone or download this repository to your computer.
+2. Open your terminal, navigate to the project folder, and install the dependencies. 
+*(Note: We use the legacy flag to bypass strict versioning conflicts with Expo's ESLint dependencies).*
 
 ```bash
-npm run reset-project
-```
+npm install --legacy-peer-deps
+🚀 Running the App
+You have three different ways to run the app depending on what you are testing and your Wi-Fi setup.
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Option 1: Web Mode (Best for testing Google Login)
+Since native Google Sign-In requires a compiled developer build, the easiest way to test authentication logic is directly in your computer's browser.
 
-## Learn more
+Bash
+npx expo start -w
+Alternatively, run npx expo start and press w in the terminal.
 
-To learn more about developing your project with Expo, look at the following resources:
+Option 2: Local Network (Standard Phone Testing)
+Use this if your computer and your phone are connected to the exact same Wi-Fi network.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Bash
+npx expo start
+iOS: Open your iPhone's Camera app and scan the QR code that appears in the terminal. Tap the Expo link.
 
-## Join the community
+Android: Open the Expo Go app and tap "Scan QR Code".
 
-Join our community of developers creating universal apps.
+Option 3: Tunnel Mode (For Network Restrictions)
+If your Wi-Fi blocks local network connections (common on university or public networks), use a tunnel to route the app through the internet.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Bash
+npx expo start --tunnel
+Note: This requires ngrok to be installed globally on your machine. Scan the QR code exactly as you would in Option 2.
+
+⚠️ Important Developer Notes & Known Expo Go Limitations
+Google Sign-In on Expo Go:
+Standard Expo Go does not support custom native modules. Because this app uses @react-native-google-signin/google-signin for maximum security on mobile, clicking the Google button inside the Expo Go app will trigger a bypass alert.
+
+To test the app in Expo Go: Use the standard Email/Password login.
+
+To fully test native Google Auth on a physical device: You must compile a Custom Dev Client using eas build.
+
+Firebase Persistence:
+This app dynamically switches its storage mechanism depending on the platform. It uses standard browser caching for the Web and AsyncStorage for iOS/Android to prevent auth/argument-error crashes.

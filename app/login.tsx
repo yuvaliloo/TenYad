@@ -22,9 +22,18 @@ import {
   Text 
 } from 'react-native';
 
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+
+// 🟢 FIX: Dynamically load GoogleSignin so it doesn't crash Expo Go
+let GoogleSignin: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    GoogleSignin = require('@react-native-google-signin/google-signin').GoogleSignin;
+  } catch (error) {
+    console.log("Google Sign-In native module bypassed for Expo Go.");
+  }
+}
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -34,7 +43,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false); 
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
+    // Only configure if GoogleSignin successfully loaded
+    if (GoogleSignin) {
       GoogleSignin.configure({
         webClientId: "1002386513502-5svn830rqk6407c3pfjcjjuc009h0do6.apps.googleusercontent.com",
         iosClientId: "278245358919-8c2n5t37ijogknef1nakhke6bdh3s03s.apps.googleusercontent.com",
@@ -58,6 +68,13 @@ export default function LoginScreen() {
         const provider = new GoogleAuthProvider();
         await signInWithPopup(auth, provider);
       } else {
+        // 🟢 FIX: Alert the user if they try to use Google Login inside Expo Go
+        if (!GoogleSignin) {
+          setLoading(false);
+          Alert.alert("Notice", "Google Sign-In requires the web browser or a fully built app. It does not work inside Expo Go.");
+          return;
+        }
+
         await GoogleSignin.hasPlayServices();
         const userInfo = await GoogleSignin.signIn();
         const idToken = userInfo.data?.idToken;
@@ -158,7 +175,6 @@ export default function LoginScreen() {
              {loading ? <ActivityIndicator color="#fff"/> : <ThemedText style={styles.loginButtonText}>Log In</ThemedText>}
           </TouchableOpacity>
 
-          {/* 🟢 RESTORED: Forgot Password Link */}
           <TouchableOpacity onPress={() => router.push('/reset-password')}>
             <ThemedText style={styles.forgotPassword}>Forgot Password?</ThemedText>
           </TouchableOpacity>
@@ -175,7 +191,6 @@ export default function LoginScreen() {
           <Text style={styles.googleButtonText}>Continue with Google</Text>
         </TouchableOpacity>
 
-        {/* 🟢 RESTORED: Sign Up Link */}
         <ThemedView style={styles.footer}>
           <ThemedText>Don't have an account? </ThemedText>
           <TouchableOpacity onPress={() => router.push('/signup')}>
@@ -204,8 +219,6 @@ const styles = StyleSheet.create({
   orText: { marginHorizontal: 10, color: '#888', fontWeight: '600' },
   googleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd', paddingVertical: 12, borderRadius: 12, width: "100%", elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
   googleButtonText: { color: "#333", fontSize: 16, fontWeight: "600" },
-  
-  // 🟢 RESTORED STYLES
   forgotPassword: { textAlign: 'center', marginTop: 15, color: '#588157' },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 40, backgroundColor: 'transparent' },
   signupLink: { color: '#588157' },
